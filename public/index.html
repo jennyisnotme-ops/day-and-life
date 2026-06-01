@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="theme-color" content="#2563eb" id="theme-color-meta"/>
+<title>Day and Life</title>
+<link rel="manifest" href="/manifest.json"/>
+<link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+<link rel="stylesheet" href="/css/base.css"/>
+<link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="login-screen" style="display:none;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg3)">
+  <div style="background:var(--bg);border-radius:var(--radius-xl);box-shadow:var(--shadow-lg);padding:36px;width:min(360px,92vw)">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:36px;margin-bottom:8px">📋</div>
+      <h1 style="font-size:20px;font-weight:700">Day and Life</h1>
+      <p style="color:var(--text2);font-size:13px;margin-top:4px">登入繼續</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div><label>帳號</label><input type="text" id="login-user" autocomplete="username"/></div>
+      <div><label>密碼</label><input type="password" id="login-pass" autocomplete="current-password"/></div>
+      <div id="login-err" style="color:#dc2626;font-size:13px;display:none"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px" onclick="doLogin()">登入</button>
+    </div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app" style="display:none" class="app-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">📋</span>
+      <span>Day and Life</span>
+    </div>
+
+    <div>
+      <div class="sidebar-section-label">行事曆</div>
+      <div id="cal-list" style="margin-top:6px"></div>
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;color:var(--text2)" onclick="openModal('new-cal')">
+        + 新增行事曆
+      </button>
+    </div>
+
+    <div class="sidebar-bottom">
+      <div class="user-chip" onclick="openSettings()">
+        <div class="avatar" id="sidebar-avatar">U</div>
+        <span class="user-name" id="sidebar-name">載入中...</span>
+        <span style="color:var(--text3);font-size:14px">⚙</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main-area">
+    <header class="main-header">
+      <button class="btn-icon" id="mobile-menu-btn" onclick="toggleSidebar()" style="display:none">☰</button>
+      <div class="header-title" id="header-title">2026年 6月</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="nav-btn" onclick="navigate(-1)">‹</button>
+        <button class="nav-btn today-btn" onclick="goToday()">今天</button>
+        <button class="nav-btn" onclick="navigate(1)">›</button>
+        <div class="view-tabs">
+          <button class="view-tab active" data-view="month" onclick="switchView('month',this)">月</button>
+          <button class="view-tab" data-view="week" onclick="switchView('week',this)">週</button>
+          <button class="view-tab" data-view="day" onclick="switchView('day',this)">日</button>
+          <button class="view-tab" data-view="stats" onclick="switchView('stats',this)">統計</button>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('add-task')">+ 新增</button>
+      </div>
+    </header>
+
+    <main class="content" id="main-content">
+      <!-- rendered by JS -->
+    </main>
+  </div>
+</div>
+
+<!-- ── Modals ─────────────────────────────────────────────────────── -->
+
+<!-- Add/Edit Task Modal -->
+<div class="overlay" id="modal-add-task" onclick="closeModalOnBg(event,'modal-add-task')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="task-modal-title">新增任務</h2>
+      <button class="btn-icon" onclick="closeModal('modal-add-task')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div>
+        <label>日期</label>
+        <input type="date" id="task-date"/>
+      </div>
+      <div>
+        <label>行事曆</label>
+        <select id="task-calendar"></select>
+      </div>
+      <div>
+        <label>分類（選填）</label>
+        <select id="task-category"><option value="">── 不選分類 ──</option></select>
+      </div>
+      <div>
+        <label>任務內容</label>
+        <input type="text" id="task-title" placeholder="輸入任務..." autocomplete="off"/>
+      </div>
+      <div>
+        <label>時間標記（選填）</label>
+        <input type="time" id="task-time"/>
+      </div>
+      <div>
+        <label>重複</label>
+        <select id="task-repeat">
+          <option value="none">不重複</option>
+          <option value="daily">每天</option>
+          <option value="weekly">每週</option>
+          <option value="monthly">每月</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="task-delete-btn" style="display:none;margin-right:auto" onclick="deleteCurrentTask()">刪除</button>
+      <button class="btn" onclick="closeModal('modal-add-task')">取消</button>
+      <button class="btn btn-primary" onclick="saveTask()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Calendar Modal -->
+<div class="overlay" id="modal-new-cal" onclick="closeModalOnBg(event,'modal-new-cal')">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <h2 id="cal-modal-title">新增行事曆</h2>
+      <button class="btn-icon" onclick="closeModal('modal-new-cal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div>
+        <label>名稱</label>
+        <input type="text" id="cal-name" placeholder="例：工作、家庭..."/>
+      </div>
+      <div>
+        <label>顏色</label>
+        <div class="color-picker-row" id="cal-color-picker"></div>
+        <input type="hidden" id="cal-color" value="#2563eb"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-new-cal')">取消</button>
+      <button class="btn btn-primary" onclick="saveCalendar()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Panel -->
+<div class="settings-overlay" id="settings-overlay" onclick="closeSettingsOnBg(event)">
+  <div class="settings-panel">
+    <div class="settings-header">
+      <h2 style="font-size:16px;font-weight:700">設定</h2>
+      <button class="btn-icon" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="settings-body">
+
+      <div class="settings-section">
+        <div class="settings-section-label">主題色</div>
+        <div class="theme-swatches" id="theme-swatches"></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-label">分類管理</div>
+        <div>
+          <label style="margin-bottom:6px">行事曆</label>
+          <select id="settings-cat-calendar" onchange="renderSettingsCategories()"></select>
+        </div>
+        <div class="cat-list" id="settings-cat-list" style="margin-top:10px"></div>
+        <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="openAddCategory()">+ 新增分類</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-label">行事曆成員</div>
+        <div>
+          <label style="margin-bottom:6px">行事曆</label>
+          <select id="settings-mem-calendar" onchange="renderSettingsMembers()"></select>
+        </div>
+        <div class="member-list" id="settings-mem-list" style="margin-top:10px"></div>
+        <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="openInviteMember()">+ 邀請成員</button>
+      </div>
+
+      <div class="settings-section" id="admin-section" style="display:none">
+        <div class="settings-section-label">帳號管理（管理員）</div>
+        <div id="user-list"></div>
+        <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="openAddUser()">+ 新增帳號</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-label">帳號</div>
+        <button class="btn btn-sm" style="width:100%" onclick="openChangePassword()">修改密碼</button>
+        <button class="btn btn-sm btn-danger" style="width:100%;margin-top:6px" onclick="doLogout()">登出</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Generic small modal for categories, users, password, etc. -->
+<div class="overlay" id="modal-small" onclick="closeModalOnBg(event,'modal-small')">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <h2 id="small-modal-title"></h2>
+      <button class="btn-icon" onclick="closeModal('modal-small')">✕</button>
+    </div>
+    <div class="modal-body" id="small-modal-body"></div>
+    <div class="modal-footer" id="small-modal-footer"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="/js/config.js" defer></script>
+<script src="/js/api.js" defer></script>
+<script src="/js/state.js" defer></script>
+<script src="/js/views.js" defer></script>
+<script src="/js/drag.js" defer></script>
+<script src="/js/modal.js" defer></script>
+<script src="/js/stats.js" defer></script>
+<script src="/js/settings.js" defer></script>
+<script src="/js/main.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+'use strict';
+
+async function init() {
+  // Try to restore session
+  try {
+    const { user, settings } = await API.me();
+    S.user = user;
+    S.themeAccent = settings.theme_accent || '#2563eb';
+    applyTheme(S.themeAccent);
+    await loadAppData(settings);
+    showApp();
+  } catch {
+    showLogin();
+  }
+}
+
+async function loadAppData(settings) {
+  [S.calendars, S.categories, S.allUsers] = await Promise.all([
+    API.getCalendars(),
+    API.getCategories(),
+    API.getUsers(),
+  ]);
+
+  // Restore visible calendars from settings, fallback to all
+  const savedIds = settings?.visible_calendar_ids || [];
+  S.visibleCalIds = savedIds.length
+    ? S.calendars.filter(c => savedIds.includes(c.id)).map(c => c.id)
+    : S.calendars.map(c => c.id);
+
+  await reloadData();
+}
+
+function showLogin() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  setTimeout(() => document.getElementById('login-user').focus(), 50);
+
+  document.getElementById('login-pass').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+  document.getElementById('login-user').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('login-pass').focus();
+  });
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  if (window.innerWidth <= 768) {
+    document.getElementById('mobile-menu-btn').style.display = '';
+  }
+  renderApp();
+}
+
+async function doLogin() {
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-err');
+  errEl.style.display = 'none';
+  try {
+    const { user, settings } = await API.login(username, password);
+    S.user = user;
+    S.themeAccent = settings.theme_accent || '#2563eb';
+    applyTheme(S.themeAccent);
+    await loadAppData(settings);
+    showApp();
+  } catch(err) {
+    errEl.textContent = err.message;
+    errEl.style.display = '';
+  }
+}
+
+async function doLogout() {
+  await API.logout();
+  S.user = null;
+  S.calendars = [];
+  S.tasks = [];
+  closeSettings();
+  showLogin();
+}
+
+function switchView(view, btn) {
+  S.view = view;
+  document.querySelectorAll('.view-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  reloadData().then(() => renderApp());
+}
+
+function navigate(dir) {
+  if (S.view === 'month' || S.view === 'stats') {
+    S.cursor = new Date(S.cursor.getFullYear(), S.cursor.getMonth() + dir, 1);
+  } else if (S.view === 'week') {
+    S.cursor = addDays(S.cursor, dir * 7);
+  } else if (S.view === 'day') {
+    S.cursor = addDays(S.cursor, dir);
+  }
+  reloadData().then(() => renderApp());
+}
+
+function goToday() {
+  S.cursor = new Date();
+  reloadData().then(() => renderApp());
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('mobile-open');
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (!S.user) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+  if (e.key === 'n' || e.key === 'N') {
+    openAddTaskOnDate(fmtDate(S.view === 'day' ? S.cursor : new Date()));
+  }
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.overlay.open').forEach(m => m.classList.remove('open'));
+    closeSettings();
+  }
+  if (e.key === 'ArrowLeft') navigate(-1);
+  if (e.key === 'ArrowRight') navigate(1);
+});
+
+// Override openModal for new-cal to init color picker
+const _origOpenNewCal = window.openModal;
+document.addEventListener('DOMContentLoaded', () => {
+  // Patch new-cal open button
+  const btn = document.querySelector('[onclick="openModal(\'new-cal\')"]');
+  if (btn) btn.setAttribute('onclick', 'openModal_newCal()');
+});
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+document.addEventListener('DOMContentLoaded', init);

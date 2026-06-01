@@ -1,0 +1,373 @@
+'use strict';
+const express = require('express');
+const session = require('express-session');
+const PgSession = require('connect-pg-simple')(session);
+const bcrypt = require('bcrypt');
+const { Pool } = require('pg');
+const path = require('path');
+
+const app = express();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.use(session({
+  store: new PgSession({ pool, tableName: 'sessions' }),
+  secret: process.env.SESSION_SECRET || 'day-and-life-secret-change-me',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
+}));
+
+const auth = (req, res, next) => {
+  if (!req.session.userId) return res.status(401).json({ error: 'Unauthorized' });
+  next();
+};
+const adminOnly = async (req, res, next) => {
+  if (!req.session.userId) return res.status(401).json({ error: 'Unauthorized' });
+  const { rows } = await pool.query('SELECT is_admin FROM users WHERE id=$1', [req.session.userId]);
+  if (!rows[0]?.is_admin) return res.status(403).json({ error: 'Admin only' });
+  next();
+};
+
+// ── Auth ──────────────────────────────────────────────────────────────
+app.get('/api/me', auth, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT id, username, display_name, avatar_color, is_admin FROM users WHERE id=$1',
+    [req.session.userId]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  const settings = await pool.query('SELECT * FROM user_settings WHERE user_id=$1', [req.session.userId]);
+  res.json({ user: rows[0], settings: settings.rows[0] || {} });
+});
+
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  const { rows } = await pool.query('SELECT * FROM users WHERE username=$1', [username]);
+  if (!rows[0]) return res.status(401).json({ error: '帳號或密碼錯誤' });
+  const ok = await bcrypt.compare(password, rows[0].password_hash);
+  if (!ok) return res.status(401).json({ error: '帳號或密碼錯誤' });
+  req.session.userId = rows[0].id;
+  const settings = await pool.query('SELECT * FROM user_settings WHERE user_id=$1', [rows[0].id]);
+  res.json({
+    user: { id: rows[0].id, username: rows[0].username, display_name: rows[0].display_name, avatar_color: rows[0].avatar_color, is_admin: rows[0].is_admin },
+    settings: settings.rows[0] || {}
+  });
+});
+
+app.post('/api/logout', (req, res) => {
+  req.session.destroy(() => res.json({ ok: true }));
+});
+
+app.patch('/api/me/password', auth, async (req, res) => {
+  const { current_password, new_password } = req.body;
+  const { rows } = await pool.query('SELECT password_hash FROM users WHERE id=$1', [req.session.userId]);
+  const ok = await bcrypt.compare(current_password, rows[0].password_hash);
+  if (!ok) return res.status(400).json({ error: '目前密碼錯誤' });
+  const hash = await bcrypt.hash(new_password, 10);
+  await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, req.session.userId]);
+  res.json({ ok: true });
+});
+
+// ── User Settings ─────────────────────────────────────────────────────
+app.get('/api/settings', auth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM user_settings WHERE user_id=$1', [req.session.userId]);
+  res.json(rows[0] || { theme_accent: '#2563eb', visible_calendar_ids: [] });
+});
+
+app.put('/api/settings', auth, async (req, res) => {
+  const { theme_accent, visible_calendar_ids } = req.body;
+  await pool.query(`
+    INSERT INTO user_settings(user_id, theme_accent, visible_calendar_ids)
+    VALUES($1,$2,$3)
+    ON CONFLICT(user_id) DO UPDATE SET theme_accent=$2, visible_calendar_ids=$3
+  `, [req.session.userId, theme_accent, visible_calendar_ids]);
+  res.json({ ok: true });
+});
+
+// ── Users (admin) ─────────────────────────────────────────────────────
+app.get('/api/users', auth, async (req, res) => {
+  const { rows } = await pool.query('SELECT id, username, display_name, avatar_color, is_admin, created_at FROM users ORDER BY id');
+  res.json(rows);
+});
+
+app.post('/api/users', adminOnly, async (req, res) => {
+  const { username, password, display_name, avatar_color, is_admin } = req.body;
+  const hash = await bcrypt.hash(password, 10);
+  const { rows } = await pool.query(
+    'INSERT INTO users(username,password_hash,display_name,avatar_color,is_admin) VALUES($1,$2,$3,$4,$5) RETURNING id,username,display_name,avatar_color,is_admin',
+    [username, hash, display_name, avatar_color || '#2563eb', !!is_admin]
+  );
+  res.json(rows[0]);
+});
+
+app.patch('/api/users/:id', adminOnly, async (req, res) => {
+  const { display_name, avatar_color, is_admin, password } = req.body;
+  const uid = parseInt(req.params.id);
+  if (display_name !== undefined) await pool.query('UPDATE users SET display_name=$1 WHERE id=$2', [display_name, uid]);
+  if (avatar_color !== undefined) await pool.query('UPDATE users SET avatar_color=$1 WHERE id=$2', [avatar_color, uid]);
+  if (is_admin !== undefined) await pool.query('UPDATE users SET is_admin=$1 WHERE id=$2', [!!is_admin, uid]);
+  if (password) {
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, uid]);
+  }
+  const { rows } = await pool.query('SELECT id,username,display_name,avatar_color,is_admin FROM users WHERE id=$1', [uid]);
+  res.json(rows[0]);
+});
+
+app.delete('/api/users/:id', adminOnly, async (req, res) => {
+  const uid = parseInt(req.params.id);
+  if (uid === req.session.userId) return res.status(400).json({ error: '無法刪除自己' });
+  await pool.query('DELETE FROM users WHERE id=$1', [uid]);
+  res.json({ ok: true });
+});
+
+// ── Calendars ─────────────────────────────────────────────────────────
+app.get('/api/calendars', auth, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT c.*, cm.role as my_role,
+      (SELECT json_agg(json_build_object('user_id',cm2.user_id,'role',cm2.role,'display_name',u2.display_name,'avatar_color',u2.avatar_color))
+       FROM calendar_members cm2 JOIN users u2 ON u2.id=cm2.user_id WHERE cm2.calendar_id=c.id) as members
+    FROM calendars c
+    JOIN calendar_members cm ON cm.calendar_id=c.id AND cm.user_id=$1
+    ORDER BY c.id
+  `, [req.session.userId]);
+  res.json(rows);
+});
+
+app.post('/api/calendars', auth, async (req, res) => {
+  const { name, color } = req.body;
+  const { rows } = await pool.query(
+    'INSERT INTO calendars(name,color,owner_id) VALUES($1,$2,$3) RETURNING *',
+    [name, color || '#2563eb', req.session.userId]
+  );
+  await pool.query('INSERT INTO calendar_members(calendar_id,user_id,role) VALUES($1,$2,$3)', [rows[0].id, req.session.userId, 'admin']);
+  res.json(rows[0]);
+});
+
+app.patch('/api/calendars/:id', auth, async (req, res) => {
+  const cid = parseInt(req.params.id);
+  const { name, color } = req.body;
+  const role = await pool.query('SELECT role FROM calendar_members WHERE calendar_id=$1 AND user_id=$2', [cid, req.session.userId]);
+  if (!role.rows[0] || role.rows[0].role !== 'admin') return res.status(403).json({ error: '需要管理員權限' });
+  if (name) await pool.query('UPDATE calendars SET name=$1 WHERE id=$2', [name, cid]);
+  if (color) await pool.query('UPDATE calendars SET color=$1 WHERE id=$2', [color, cid]);
+  const { rows } = await pool.query('SELECT * FROM calendars WHERE id=$1', [cid]);
+  res.json(rows[0]);
+});
+
+app.delete('/api/calendars/:id', auth, async (req, res) => {
+  const cid = parseInt(req.params.id);
+  const { rows } = await pool.query('SELECT owner_id FROM calendars WHERE id=$1', [cid]);
+  if (!rows[0] || rows[0].owner_id !== req.session.userId) return res.status(403).json({ error: '只有建立者可以刪除' });
+  await pool.query('DELETE FROM calendars WHERE id=$1', [cid]);
+  res.json({ ok: true });
+});
+
+app.post('/api/calendars/:id/members', auth, async (req, res) => {
+  const cid = parseInt(req.params.id);
+  const { user_id, role } = req.body;
+  const myRole = await pool.query('SELECT role FROM calendar_members WHERE calendar_id=$1 AND user_id=$2', [cid, req.session.userId]);
+  if (!myRole.rows[0] || myRole.rows[0].role !== 'admin') return res.status(403).json({ error: '需要管理員權限' });
+  await pool.query(
+    'INSERT INTO calendar_members(calendar_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+    [cid, user_id, role || 'member']
+  );
+  res.json({ ok: true });
+});
+
+app.delete('/api/calendars/:cid/members/:uid', auth, async (req, res) => {
+  const cid = parseInt(req.params.cid);
+  const uid = parseInt(req.params.uid);
+  const myRole = await pool.query('SELECT role FROM calendar_members WHERE calendar_id=$1 AND user_id=$2', [cid, req.session.userId]);
+  if (!myRole.rows[0] || myRole.rows[0].role !== 'admin') return res.status(403).json({ error: '需要管理員權限' });
+  await pool.query('DELETE FROM calendar_members WHERE calendar_id=$1 AND user_id=$2', [cid, uid]);
+  res.json({ ok: true });
+});
+
+// ── Categories ────────────────────────────────────────────────────────
+app.get('/api/categories', auth, async (req, res) => {
+  const { calendar_id } = req.query;
+  let q = `SELECT cat.* FROM categories cat
+    JOIN calendar_members cm ON cm.calendar_id=cat.calendar_id AND cm.user_id=$1`;
+  const params = [req.session.userId];
+  if (calendar_id) { q += ' WHERE cat.calendar_id=$2'; params.push(parseInt(calendar_id)); }
+  q += ' ORDER BY cat.calendar_id, cat.sort_order, cat.id';
+  const { rows } = await pool.query(q, params);
+  res.json(rows);
+});
+
+app.post('/api/categories', auth, async (req, res) => {
+  const { calendar_id, name, color } = req.body;
+  const { rows } = await pool.query(
+    'INSERT INTO categories(calendar_id,name,color) VALUES($1,$2,$3) RETURNING *',
+    [calendar_id, name, color || '#2563eb']
+  );
+  res.json(rows[0]);
+});
+
+app.patch('/api/categories/:id', auth, async (req, res) => {
+  const { name, color } = req.body;
+  const id = parseInt(req.params.id);
+  if (name !== undefined) await pool.query('UPDATE categories SET name=$1 WHERE id=$2', [name, id]);
+  if (color !== undefined) await pool.query('UPDATE categories SET color=$1 WHERE id=$2', [color, id]);
+  const { rows } = await pool.query('SELECT * FROM categories WHERE id=$1', [id]);
+  res.json(rows[0]);
+});
+
+app.delete('/api/categories/:id', auth, async (req, res) => {
+  await pool.query('DELETE FROM categories WHERE id=$1', [parseInt(req.params.id)]);
+  res.json({ ok: true });
+});
+
+// ── Tasks ─────────────────────────────────────────────────────────────
+app.get('/api/tasks', auth, async (req, res) => {
+  const { calendar_ids, date_from, date_to } = req.query;
+  const ids = (calendar_ids || '').split(',').map(Number).filter(Boolean);
+  if (!ids.length) return res.json([]);
+  const { rows } = await pool.query(`
+    SELECT t.*, cat.name as category_name, cat.color as category_color,
+      u.display_name as assigned_name, u.avatar_color as assigned_color
+    FROM tasks t
+    LEFT JOIN categories cat ON cat.id=t.category_id
+    LEFT JOIN users u ON u.id=t.assigned_to
+    WHERE t.calendar_id = ANY($1) AND t.date BETWEEN $2 AND $3
+    ORDER BY t.date, t.sort_order, t.id
+  `, [ids, date_from, date_to]);
+  res.json(rows);
+});
+
+app.post('/api/tasks', auth, async (req, res) => {
+  const { calendar_id, category_id, title, date, time_hint, repeat_type, assigned_to } = req.body;
+  const { rows: orderRows } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order),0)+1 as next FROM tasks WHERE calendar_id=$1 AND date=$2',
+    [calendar_id, date]
+  );
+  const { rows } = await pool.query(`
+    INSERT INTO tasks(calendar_id,created_by,assigned_to,category_id,title,date,time_hint,sort_order,repeat_type)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
+  `, [calendar_id, req.session.userId, assigned_to || req.session.userId, category_id || null, title, date, time_hint || null, orderRows[0].next, repeat_type || 'none']);
+  const task = rows[0];
+  if (task.category_id) {
+    const cat = await pool.query('SELECT name,color FROM categories WHERE id=$1', [task.category_id]);
+    task.category_name = cat.rows[0]?.name;
+    task.category_color = cat.rows[0]?.color;
+  }
+  res.json(task);
+});
+
+app.patch('/api/tasks/:id', auth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { title, category_id, date, time_hint, completed, assigned_to } = req.body;
+  const { rows: cur } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
+  if (!cur[0]) return res.status(404).json({ error: 'Not found' });
+
+  let moveCount = cur[0].move_count;
+  if (date !== undefined && date !== cur[0].date) moveCount++;
+
+  await pool.query(`UPDATE tasks SET
+    title=COALESCE($1,title),
+    category_id=CASE WHEN $2::int IS NULL AND $3=true THEN NULL ELSE COALESCE($2::int,category_id) END,
+    date=COALESCE($4,date),
+    time_hint=COALESCE($5,time_hint),
+    completed=COALESCE($6,completed),
+    completed_at=CASE WHEN $6=true THEN NOW() WHEN $6=false THEN NULL ELSE completed_at END,
+    assigned_to=COALESCE($7,assigned_to),
+    move_count=$8,
+    updated_at=NOW()
+    WHERE id=$9`,
+    [title, category_id, category_id === null, date, time_hint, completed, assigned_to, moveCount, id]
+  );
+
+  const { rows } = await pool.query(`
+    SELECT t.*, cat.name as category_name, cat.color as category_color
+    FROM tasks t LEFT JOIN categories cat ON cat.id=t.category_id WHERE t.id=$1
+  `, [id]);
+  res.json(rows[0]);
+});
+
+app.delete('/api/tasks/:id', auth, async (req, res) => {
+  await pool.query('DELETE FROM tasks WHERE id=$1', [parseInt(req.params.id)]);
+  res.json({ ok: true });
+});
+
+app.post('/api/tasks/reorder', auth, async (req, res) => {
+  const { ordered_ids } = req.body;
+  for (let i = 0; i < ordered_ids.length; i++) {
+    await pool.query('UPDATE tasks SET sort_order=$1 WHERE id=$2', [i, ordered_ids[i]]);
+  }
+  res.json({ ok: true });
+});
+
+// ── Daily Notes ───────────────────────────────────────────────────────
+app.get('/api/notes', auth, async (req, res) => {
+  const { calendar_id, date_from, date_to } = req.query;
+  const { rows } = await pool.query(
+    'SELECT * FROM daily_notes WHERE calendar_id=$1 AND date BETWEEN $2 AND $3',
+    [calendar_id, date_from, date_to]
+  );
+  res.json(rows);
+});
+
+app.put('/api/notes', auth, async (req, res) => {
+  const { calendar_id, date, content } = req.body;
+  await pool.query(`
+    INSERT INTO daily_notes(calendar_id,date,content) VALUES($1,$2,$3)
+    ON CONFLICT(calendar_id,date) DO UPDATE SET content=$3, updated_at=NOW()
+  `, [calendar_id, date, content]);
+  res.json({ ok: true });
+});
+
+// ── Stats ─────────────────────────────────────────────────────────────
+app.get('/api/stats', auth, async (req, res) => {
+  const { calendar_ids, year, month } = req.query;
+  const ids = (calendar_ids || '').split(',').map(Number).filter(Boolean);
+  if (!ids.length) return res.json([]);
+  const dateFrom = `${year}-${String(month).padStart(2,'0')}-01`;
+  const dateTo = new Date(year, month, 0).toISOString().slice(0, 10);
+
+  const { rows } = await pool.query(`
+    SELECT
+      COALESCE(cat.name,'未分類') as category_name,
+      COALESCE(cat.color,'#9e9e99') as category_color,
+      COUNT(*) as total,
+      COUNT(*) FILTER(WHERE t.completed) as completed,
+      AVG(t.move_count) as avg_moves
+    FROM tasks t
+    LEFT JOIN categories cat ON cat.id=t.category_id
+    WHERE t.calendar_id = ANY($1) AND t.date BETWEEN $2 AND $3
+    GROUP BY cat.name, cat.color
+    ORDER BY total DESC
+  `, [ids, dateFrom, dateTo]);
+  res.json(rows);
+});
+
+// ── Init DB & Start ───────────────────────────────────────────────────
+async function initDb() {
+  const fs = require('fs');
+  const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+  await pool.query(schema);
+
+  const { rows } = await pool.query('SELECT COUNT(*) FROM users');
+  if (rows[0].count === '0') {
+    const hash = await bcrypt.hash('admin1234', 10);
+    const u = await pool.query(
+      "INSERT INTO users(username,password_hash,display_name,avatar_color,is_admin) VALUES('admin',$1,'管理員','#2563eb',true) RETURNING id",
+      [hash]
+    );
+    const cal = await pool.query(
+      "INSERT INTO calendars(name,color,owner_id) VALUES('工作','#2563eb',$1) RETURNING id",
+      [u.rows[0].id]
+    );
+    await pool.query('INSERT INTO calendar_members(calendar_id,user_id,role) VALUES($1,$2,$3)', [cal.rows[0].id, u.rows[0].id, 'admin']);
+    await pool.query('INSERT INTO categories(calendar_id,name,color) VALUES($1,$2,$3),($1,$4,$5),($1,$6,$7)',
+      [cal.rows[0].id, '會議', '#7c3aed', '內容製作', '#16a34a', '行政事務', '#ea580c']);
+    console.log('✅ 初始帳號 admin / admin1234 已建立');
+  }
+}
+
+const PORT = process.env.PORT || 3001;
+initDb().then(() => {
+  app.listen(PORT, () => console.log(`🚀 Day and Life 啟動於 http://localhost:${PORT}`));
+}).catch(err => { console.error('DB init failed:', err); process.exit(1); });
