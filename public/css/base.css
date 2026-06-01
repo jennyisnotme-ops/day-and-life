@@ -92,7 +92,11 @@ button{cursor:pointer;font-family:inherit}
 
 /* Color Picker */
 .cp-wrap{display:flex;flex-direction:column;gap:8px}
-.cp-gradient{width:100%;height:160px;border-radius:var(--radius);cursor:crosshair;position:relative;border:1px solid var(--border2)}
+.cp-swatches{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.cp-swatch{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .1s,border-color .1s;flex-shrink:0}
+.cp-swatch:hover{transform:scale(1.18)}
+.cp-swatch.active{border-color:var(--text);transform:scale(1.1)}
+.cp-gradient{width:100%;height:140px;border-radius:var(--radius);cursor:crosshair;position:relative;border:1px solid var(--border2)}
 .cp-cursor{width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);position:absolute;transform:translate(-50%,-50%);pointer-events:none}
 .cp-hue{width:100%;height:14px;border-radius:999px;cursor:pointer;position:relative;
   background:linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}

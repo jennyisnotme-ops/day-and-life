@@ -113,10 +113,15 @@ function buildColorPicker2D(containerId, hiddenId, initial, onChange) {
   const [ih, is, il] = hexToHsl(initial || '#2563eb');
   let hue = ih, sat = is, lit = il;
 
+  const swatchHtml = THEME_COLORS.map(c =>
+    `<div class="cp-swatch" data-color="${c.value}" title="${c.name}" style="background:${c.value}"></div>`
+  ).join('');
+
   wrap.innerHTML = `
     <div class="cp-wrap">
-      <canvas class="cp-gradient" id="${containerId}-canvas" width="300" height="160"></canvas>
-      <div style="position:relative;margin:2px 0">
+      <div class="cp-swatches">${swatchHtml}</div>
+      <canvas class="cp-gradient" id="${containerId}-canvas" width="260" height="140"></canvas>
+      <div style="position:relative;margin:6px 0 2px">
         <div class="cp-hue"></div>
         <div class="cp-hue-thumb" id="${containerId}-hthumb"></div>
       </div>
@@ -203,6 +208,13 @@ function buildColorPicker2D(containerId, hiddenId, initial, onChange) {
       [hue, sat, lit] = hexToHsl(v);
       updateUI();
     }
+  });
+
+  wrap.querySelectorAll('.cp-swatch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      [hue, sat, lit] = hexToHsl(sw.dataset.color);
+      updateUI();
+    });
   });
 
   setTimeout(updateUI, 50);
