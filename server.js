@@ -231,7 +231,7 @@ app.get('/api/tasks', auth, async (req, res) => {
       u.display_name as assigned_name, u.avatar_color as assigned_color
     FROM dal_tasks t
     LEFT JOIN dal_categories cat ON cat.id=t.category_id
-    LEFT JOIN users u ON u.id=t.assigned_to
+    LEFT JOIN dal_users u ON u.id=t.assigned_to
     WHERE t.calendar_id = ANY($1) AND t.date BETWEEN $2 AND $3
     ORDER BY t.date, t.sort_order, t.id
   `, [ids, date_from, date_to]);
