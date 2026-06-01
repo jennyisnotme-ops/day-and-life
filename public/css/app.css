@@ -243,6 +243,12 @@
 .member-list{display:flex;flex-direction:column;gap:6px}
 .member-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--bg2)}
 
+/* ── Mobile sidebar overlay ────────────────────────────────────────── */
+#sidebar-overlay{
+  display:none;position:fixed;inset:0;z-index:79;background:rgba(0,0,0,.4);
+}
+#sidebar-overlay.active{display:block}
+
 /* ── Mobile ────────────────────────────────────────────────────────── */
 @media(max-width:768px){
   .sidebar{display:none}
@@ -250,17 +256,23 @@
     display:flex;position:fixed;inset:0 auto 0 0;
     width:260px;z-index:80;box-shadow:var(--shadow-lg);
   }
-  .content{padding:12px}
+  .content{padding:8px}
+  /* Month: keep 7 cols but tighter */
   .week-header{grid-template-columns:repeat(7,1fr)}
-  .week-header-cell{padding:6px 4px;font-size:10px}
-  .week-header-cell .day-num{font-size:14px}
+  .week-header-cell{padding:4px 2px;font-size:9px}
+  .week-header-cell .day-num{font-size:13px}
   .week-body{grid-template-columns:repeat(7,1fr)}
-  .day-col{min-height:60px;padding:2px}
-  .task-item{font-size:10px;padding:2px 3px}
+  .day-col{min-height:52px;padding:2px}
+  .task-item{font-size:9px;padding:1px 2px}
   .task-cat-dot{display:none}
+  /* Week: 2 rows × ~3.5 cols scroll, or just stack as 2 col */
+  .week-cols{grid-template-columns:repeat(4,1fr);overflow-x:auto}
+  .week-day-col{min-width:80px}
   .form-row{grid-template-columns:1fr}
-  .week-cols{grid-template-columns:1fr 1fr}
   .stat-cards{grid-template-columns:1fr 1fr}
+  /* Header: stack title on small screens */
+  .main-header{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  .header-title{font-size:14px;min-width:0;word-break:break-all}
 }
 
 /* ── Drag placeholder ──────────────────────────────────────────────── */

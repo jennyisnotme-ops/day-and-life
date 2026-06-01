@@ -18,7 +18,8 @@ function updateHeaderTitle() {
   } else if (S.view === 'week') {
     const ws = getWeekStart(S.cursor);
     const we = addDays(ws, 6);
-    el.textContent = `${fmtDate(ws)} — ${fmtDate(we)}`;
+    const fmt = d => `${d.getMonth()+1}月${d.getDate()}日`;
+    el.textContent = `${ws.getFullYear()}年 ${fmt(ws)} — ${fmt(we)}`;
   } else {
     el.textContent = `${y}年${m+1}月${S.cursor.getDate()}日（${['日','一','二','三','四','五','六'][S.cursor.getDay()]}）`;
   }

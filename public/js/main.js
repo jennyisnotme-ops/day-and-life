@@ -103,7 +103,13 @@ function goToday() {
 }
 
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('mobile-open');
+  const open = document.getElementById('sidebar').classList.toggle('mobile-open');
+  document.getElementById('sidebar-overlay').classList.toggle('active', open);
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebar-overlay').classList.remove('active');
 }
 
 // Keyboard shortcuts
