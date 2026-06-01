@@ -21,13 +21,11 @@ function closeSettingsOnBg(e) {
 }
 
 function renderThemeSwatches() {
-  const container = document.getElementById('theme-swatches');
-  container.innerHTML = THEME_COLORS.map(c =>
-    `<div class="theme-swatch${c.value===S.themeAccent?' selected':''}"
-      style="background:${c.value}"
-      title="${c.name}"
-      onclick="setTheme('${c.value}',this)"></div>`
-  ).join('');
+  buildColorPicker2D('theme-swatches', 'theme-accent-hidden', S.themeAccent, (color) => {
+    S.themeAccent = color;
+    applyTheme(color);
+    API.saveSettings({ theme_accent: color, visible_calendar_ids: S.visibleCalIds }).catch(()=>{});
+  });
 }
 
 async function setTheme(color, el) {

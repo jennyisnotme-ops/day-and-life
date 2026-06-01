@@ -90,6 +90,17 @@ button{cursor:pointer;font-family:inherit}
 }
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+/* Color Picker */
+.cp-wrap{display:flex;flex-direction:column;gap:8px}
+.cp-gradient{width:100%;height:160px;border-radius:var(--radius);cursor:crosshair;position:relative;border:1px solid var(--border2)}
+.cp-cursor{width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);position:absolute;transform:translate(-50%,-50%);pointer-events:none}
+.cp-hue{width:100%;height:14px;border-radius:999px;cursor:pointer;position:relative;
+  background:linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
+.cp-hue-thumb{width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);position:absolute;top:50%;transform:translate(-50%,-50%);pointer-events:none}
+.cp-preview-row{display:flex;align-items:center;gap:8px}
+.cp-preview{width:32px;height:32px;border-radius:50%;border:1px solid var(--border2);flex-shrink:0}
+.cp-hex{flex:1;font-size:13px;font-family:monospace}
+
 /* Scrollbar */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}

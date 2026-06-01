@@ -99,21 +99,7 @@ async function toggleTask(taskId, completed) {
 let _editingCalId = null;
 
 function buildColorPicker(pickerId, hiddenId, selected) {
-  const container = document.getElementById(pickerId);
-  if (!container) return;
-  container.innerHTML = THEME_COLORS.map(c =>
-    `<div class="color-swatch${c.value===selected?' selected':''}"
-      style="background:${c.value}"
-      title="${c.name}"
-      onclick="selectColor('${pickerId}','${hiddenId}','${c.value}',this)"></div>`
-  ).join('');
-  document.getElementById(hiddenId).value = selected || THEME_COLORS[0].value;
-}
-
-function selectColor(pickerId, hiddenId, val, el) {
-  document.getElementById(pickerId).querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
-  el.classList.add('selected');
-  document.getElementById(hiddenId).value = val;
+  buildColorPicker2D(pickerId, hiddenId, selected || '#2563eb');
 }
 
 function openEditCalendar(calId) {
