@@ -71,9 +71,12 @@ function renderMonthView(container) {
       const otherMonth = day.getMonth() + 1 !== month;
       const dayNum = day.getDate();
       const dayName = WEEKDAYS_ZH[d];
-      html += `<div class="week-header-cell${isToday?' today':''}${otherMonth?' other-month':''}" >
+      const hol = S.holidays[fmtDate(day)];
+      const holLabel = hol?.description ? `<span style="display:block;font-size:9px;color:${hol.isHoliday?'#e53e3e':'var(--text3)'}; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">${escHtml(hol.description)}</span>` : '';
+      html += `<div class="week-header-cell${isToday?' today':''}${otherMonth?' other-month':''}${hol?.isHoliday?' holiday':''}" >
         <span class="day-num" data-date="${fmtDate(day)}">${dayNum}</span>
         <span style="display:block;font-size:10px;color:var(--text3)">${dayName}</span>
+        ${holLabel}
       </div>`;
     }
     html += '</div>';
@@ -133,10 +136,12 @@ function renderWeekView(container) {
     const isToday = isSameDate(day, today);
     const tasks = getTasksForDate(dateStr);
 
+    const hol = S.holidays[dateStr];
     html += `<div class="week-day-col">
-      <div class="week-day-header${isToday?' today':''}">
+      <div class="week-day-header${isToday?' today':''}${hol?.isHoliday?' holiday':''}">
         <div class="big-num">${day.getDate()}</div>
         <div style="font-size:11px;color:var(--text3)">${WEEKDAYS_ZH[d]}</div>
+        ${hol?.description ? `<div style="font-size:10px;color:${hol.isHoliday?'#e53e3e':'var(--text3)'};margin-top:2px">${escHtml(hol.description)}</div>` : ''}
       </div>
       <div class="week-task-list" data-date="${dateStr}" ondragover="onDragOver(event)" ondrop="onDrop(event,'${dateStr}')">`;
 
@@ -160,9 +165,10 @@ function renderDayView(container) {
   const primaryCalId = getVisibleCalIds()[0];
   const noteContent = primaryCalId ? getNoteForDate(primaryCalId, dateStr) : '';
 
+  const dayHol = S.holidays[dateStr];
   let html = `<div class="day-view">
     <div class="day-view-header">
-      <span class="day-view-title">${S.cursor.getFullYear()}年${S.cursor.getMonth()+1}月${S.cursor.getDate()}日</span>
+      <span class="day-view-title">${S.cursor.getFullYear()}年${S.cursor.getMonth()+1}月${S.cursor.getDate()}日${dayHol?.description ? ` <span style="font-size:13px;color:${dayHol.isHoliday?'#e53e3e':'var(--text2)'}">· ${escHtml(dayHol.description)}</span>` : ''}</span>
       <button class="btn btn-primary btn-sm" onclick="openAddTaskOnDate('${dateStr}')">+ 新增任務</button>
     </div>
     <div class="day-task-list" data-date="${dateStr}">`;

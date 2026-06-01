@@ -1,15 +1,17 @@
 'use strict';
 const S = {
   user: null,
-  calendars: [],       // all calendars user belongs to
-  visibleCalIds: [],   // which calendars are checked ON
-  categories: [],      // all categories for visible calendars
-  tasks: [],           // tasks for current view range
-  notes: {},           // { "calId:date": content }
-  view: 'month',       // 'month' | 'week' | 'day' | 'stats'
-  cursor: new Date(),  // current date/month being viewed
+  calendars: [],
+  visibleCalIds: [],
+  categories: [],
+  tasks: [],
+  notes: {},
+  view: 'month',
+  cursor: new Date(),
   themeAccent: '#2563eb',
-  allUsers: [],        // for admin
+  allUsers: [],
+  holidays: {},   // { "YYYY-MM-DD": { description, isHoliday } }
+  _holidayYears: new Set(),
 };
 
 function getVisibleCalIds() {
@@ -68,6 +70,31 @@ async function loadNotesForView() {
   }
 }
 
+async function loadHolidaysForYear(year) {
+  if (S._holidayYears.has(year)) return;
+  S._holidayYears.add(year);
+  try {
+    const res = await fetch(`https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/${year}.json`);
+    if (!res.ok) return;
+    const data = await res.json();
+    for (const d of data) {
+      // date format: "20260101"
+      const dateStr = `${d.date.slice(0,4)}-${d.date.slice(4,6)}-${d.date.slice(6,8)}`;
+      S.holidays[dateStr] = {
+        description: d.description || '',
+        isHoliday: d.isHoliday,
+        holidayCategory: d.holidayCategory || '',
+      };
+    }
+  } catch(e) {}
+}
+
 async function reloadData() {
-  await Promise.all([loadTasksForView(), loadNotesForView()]);
+  const year = S.cursor.getFullYear();
+  await Promise.all([
+    loadTasksForView(),
+    loadNotesForView(),
+    loadHolidaysForYear(year),
+    loadHolidaysForYear(year + 1), // preload next year
+  ]);
 }

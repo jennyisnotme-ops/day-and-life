@@ -85,6 +85,8 @@
   display:flex;align-items:center;justify-content:center;margin:0 auto;
 }
 .week-header-cell.other-month{opacity:.4}
+.week-header-cell.holiday .day-num{color:#e53e3e}
+.week-day-header.holiday .big-num{color:#e53e3e}
 
 .week-body{display:grid;grid-template-columns:repeat(7,1fr)}
 .day-col{
