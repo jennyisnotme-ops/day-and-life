@@ -116,20 +116,34 @@ function buildColorPicker2D(containerId, hiddenId, initial, onChange) {
   let hue = ih, sat = is, lit = il;
 
   const swatchHtml = THEME_COLORS.map(c =>
-    `<div class="cp-swatch" data-color="${c.value}" title="${c.name}" style="background:${c.value}"></div>`
+    `<div class="cp-preset-card" data-color="${c.value}">
+      <div class="cp-preset-dot" style="background:${c.value}"></div>
+      <span class="cp-preset-name">${c.name}</span>
+    </div>`
   ).join('');
 
   wrap.innerHTML = `
     <div class="cp-wrap">
-      <div class="cp-swatches">${swatchHtml}</div>
-      <canvas class="cp-gradient" id="${containerId}-canvas" width="260" height="140"></canvas>
-      <div style="position:relative;margin:6px 0 2px">
-        <div class="cp-hue"></div>
-        <div class="cp-hue-thumb" id="${containerId}-hthumb"></div>
-      </div>
-      <div class="cp-preview-row">
-        <div class="cp-preview" id="${containerId}-preview"></div>
-        <input class="cp-hex" id="${containerId}-hex" type="text" maxlength="7" placeholder="#000000"/>
+      <div class="cp-main-row">
+        <div class="cp-left">
+          <div style="position:relative">
+            <canvas class="cp-gradient" id="${containerId}-canvas" width="220" height="130"></canvas>
+            <div class="cp-cursor" id="${containerId}-cursor"></div>
+          </div>
+          <div style="position:relative;margin:6px 0 2px">
+            <div class="cp-hue"></div>
+            <div class="cp-hue-thumb" id="${containerId}-hthumb"></div>
+          </div>
+          <div class="cp-bottom-row">
+            <div class="cp-preview" id="${containerId}-preview"></div>
+            <div class="cp-rgb-inputs">
+              <div class="cp-rgb-group"><input class="cp-rgb-input" id="${containerId}-r" type="number" min="0" max="255"/><span>R</span></div>
+              <div class="cp-rgb-group"><input class="cp-rgb-input" id="${containerId}-g" type="number" min="0" max="255"/><span>G</span></div>
+              <div class="cp-rgb-group"><input class="cp-rgb-input" id="${containerId}-b" type="number" min="0" max="255"/><span>B</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="cp-presets">${swatchHtml}</div>
       </div>
     </div>`;
 
@@ -137,18 +151,18 @@ function buildColorPicker2D(containerId, hiddenId, initial, onChange) {
   const ctx = canvas.getContext('2d');
   const hthumb = document.getElementById(`${containerId}-hthumb`);
   const preview = document.getElementById(`${containerId}-preview`);
-  const hexInput = document.getElementById(`${containerId}-hex`);
+  const cursor = document.getElementById(`${containerId}-cursor`);
+  const rInput = document.getElementById(`${containerId}-r`);
+  const gInput = document.getElementById(`${containerId}-g`);
+  const bInput = document.getElementById(`${containerId}-b`);
   const hueBar = wrap.querySelector('.cp-hue');
 
-  // cursor element
-  const cursor = document.createElement('div');
-  cursor.className = 'cp-cursor';
-  canvas.parentElement.style.position = 'relative';
-  canvas.parentElement.insertBefore(cursor, canvas.nextSibling);
+  function hexToRgb(hex) {
+    return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+  }
 
   function drawGradient() {
     const W = canvas.width, H = canvas.height;
-    // X: saturation 0→100, Y: lightness 100→0
     for (let x = 0; x < W; x++) {
       const s = (x / W) * 100;
       const grad = ctx.createLinearGradient(x, 0, x, H);
@@ -164,25 +178,22 @@ function buildColorPicker2D(containerId, hiddenId, initial, onChange) {
     drawGradient();
     const color = hslToHex(hue, sat, lit);
     preview.style.background = color;
-    hexInput.value = color;
     document.getElementById(hiddenId).value = color;
-    // position cursor
-    const rect = canvas.getBoundingClientRect();
-    const cx = (sat / 100) * canvas.offsetWidth;
-    const cy = (1 - lit / 100) * canvas.offsetHeight;
-    cursor.style.left = cx + 'px';
-    cursor.style.top = cy + 'px';
-    // position hue thumb
+    const [r,g,b] = hexToRgb(color);
+    rInput.value = r; gInput.value = g; bInput.value = b;
+    cursor.style.left = (sat / 100 * canvas.offsetWidth) + 'px';
+    cursor.style.top = ((1 - lit / 100) * canvas.offsetHeight) + 'px';
     hthumb.style.left = (hue / 360 * 100) + '%';
+    wrap.querySelectorAll('.cp-preset-card').forEach(c => {
+      c.classList.toggle('active', c.dataset.color === color);
+    });
     if (onChange) onChange(color);
   }
 
   function pickFromCanvas(e) {
     const rect = canvas.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-    sat = Math.round(x * 100);
-    lit = Math.round((1 - y) * 100);
+    sat = Math.round(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * 100);
+    lit = Math.round((1 - Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))) * 100);
     updateUI();
   }
 
@@ -197,24 +208,26 @@ function buildColorPicker2D(containerId, hiddenId, initial, onChange) {
   hueBar.addEventListener('mousedown', e => { dragging = 'hue'; pickHue(e); });
   document.addEventListener('mousemove', e => { if (dragging==='canvas') pickFromCanvas(e); else if (dragging==='hue') pickHue(e); });
   document.addEventListener('mouseup', () => dragging = null);
-
-  // touch support
   canvas.addEventListener('touchstart', e => { dragging='canvas'; pickFromCanvas(e.touches[0]); e.preventDefault(); }, {passive:false});
   hueBar.addEventListener('touchstart', e => { dragging='hue'; pickHue(e.touches[0]); e.preventDefault(); }, {passive:false});
   document.addEventListener('touchmove', e => { if(dragging==='canvas') pickFromCanvas(e.touches[0]); else if(dragging==='hue') pickHue(e.touches[0]); }, {passive:true});
   document.addEventListener('touchend', () => dragging=null);
 
-  hexInput.addEventListener('input', () => {
-    const v = hexInput.value;
-    if (/^#[0-9a-fA-F]{6}$/.test(v)) {
-      [hue, sat, lit] = hexToHsl(v);
-      updateUI();
-    }
-  });
+  function rgbInputChanged() {
+    const r = Math.max(0,Math.min(255,parseInt(rInput.value)||0));
+    const g = Math.max(0,Math.min(255,parseInt(gInput.value)||0));
+    const b = Math.max(0,Math.min(255,parseInt(bInput.value)||0));
+    const hex = '#' + [r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+    [hue, sat, lit] = hexToHsl(hex);
+    updateUI();
+  }
+  rInput.addEventListener('change', rgbInputChanged);
+  gInput.addEventListener('change', rgbInputChanged);
+  bInput.addEventListener('change', rgbInputChanged);
 
-  wrap.querySelectorAll('.cp-swatch').forEach(sw => {
-    sw.addEventListener('click', () => {
-      [hue, sat, lit] = hexToHsl(sw.dataset.color);
+  wrap.querySelectorAll('.cp-preset-card').forEach(card => {
+    card.addEventListener('click', () => {
+      [hue, sat, lit] = hexToHsl(card.dataset.color);
       updateUI();
     });
   });
