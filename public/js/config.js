@@ -124,27 +124,23 @@ function buildColorPicker2D(containerId, hiddenId, initial, onChange) {
 
   wrap.innerHTML = `
     <div class="cp-wrap">
-      <div class="cp-main-row">
-        <div class="cp-left">
-          <div style="position:relative">
-            <canvas class="cp-gradient" id="${containerId}-canvas" width="220" height="130"></canvas>
-            <div class="cp-cursor" id="${containerId}-cursor"></div>
-          </div>
-          <div style="position:relative;margin:6px 0 2px">
-            <div class="cp-hue"></div>
-            <div class="cp-hue-thumb" id="${containerId}-hthumb"></div>
-          </div>
-          <div class="cp-bottom-row">
-            <div class="cp-preview" id="${containerId}-preview"></div>
-            <div class="cp-rgb-inputs">
-              <div class="cp-rgb-group"><input class="cp-rgb-input" id="${containerId}-r" type="number" min="0" max="255"/><span>R</span></div>
-              <div class="cp-rgb-group"><input class="cp-rgb-input" id="${containerId}-g" type="number" min="0" max="255"/><span>G</span></div>
-              <div class="cp-rgb-group"><input class="cp-rgb-input" id="${containerId}-b" type="number" min="0" max="255"/><span>B</span></div>
-            </div>
-          </div>
-        </div>
-        <div class="cp-presets">${swatchHtml}</div>
+      <div style="position:relative">
+        <canvas class="cp-gradient" id="${containerId}-canvas" width="260" height="130"></canvas>
+        <div class="cp-cursor" id="${containerId}-cursor"></div>
       </div>
+      <div style="position:relative;margin:6px 0 2px">
+        <div class="cp-hue"></div>
+        <div class="cp-hue-thumb" id="${containerId}-hthumb"></div>
+      </div>
+      <div class="cp-bottom-row">
+        <div class="cp-preview" id="${containerId}-preview"></div>
+        <div class="cp-rgb-inputs">
+          <div class="cp-rgb-group"><input class="cp-rgb-input" id="${containerId}-r" type="number" min="0" max="255"/><span>R</span></div>
+          <div class="cp-rgb-group"><input class="cp-rgb-input" id="${containerId}-g" type="number" min="0" max="255"/><span>G</span></div>
+          <div class="cp-rgb-group"><input class="cp-rgb-input" id="${containerId}-b" type="number" min="0" max="255"/><span>B</span></div>
+        </div>
+      </div>
+      <div class="cp-presets">${swatchHtml}</div>
     </div>`;
 
   const canvas = document.getElementById(`${containerId}-canvas`);
