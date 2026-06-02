@@ -152,7 +152,16 @@ function renderWeekView(container) {
     html += `<button class="week-add-btn" onclick="openAddTaskOnDate('${dateStr}')">
         <span style="font-size:14px;font-weight:300">+</span> 新增
       </button>`;
-    html += '</div></div>';
+    const primaryCalId = getVisibleCalIds()[0];
+    const noteContent = primaryCalId ? getNoteForDate(primaryCalId, dateStr) : '';
+    html += `</div>
+      <div class="notes-cell week-note-cell${noteContent?' has-content':''}"
+        contenteditable="true"
+        data-cal="${primaryCalId}" data-date="${dateStr}"
+        onblur="saveNoteFromEl(this)"
+        onfocus="this.classList.add('has-content')"
+        title="筆記">${escHtml(noteContent)}</div>
+    </div>`;
   }
   html += '</div></div>';
   container.innerHTML = html;

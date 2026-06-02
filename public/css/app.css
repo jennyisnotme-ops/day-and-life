@@ -161,6 +161,7 @@
   cursor:pointer;border-radius:5px;width:100%;
 }
 .week-add-btn:hover{background:var(--bg2);color:var(--accent)}
+.week-note-cell{border-top:1px solid var(--border);min-height:28px;font-size:11px}
 
 /* ── Day View ──────────────────────────────────────────────────────── */
 .day-view{background:var(--bg);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden}
