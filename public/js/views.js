@@ -195,6 +195,7 @@ function renderTaskChip(t, mode) {
   const catDot = t.category_color
     ? `<span class="task-cat-dot" style="background:${t.category_color}"></span>` : '';
   const timeHint = t.time_hint ? `<span style="color:var(--text3);font-size:10px">${t.time_hint}</span>` : '';
+  const heart = t.notes ? `<span style="font-size:9px;color:#f43f5e;line-height:1" title="${escHtml(t.notes)}">♥</span>` : '';
 
   const multiDay = t.end_date && t.end_date.slice(0,10) !== t.date.slice(0,10)
     ? `<span style="font-size:10px;color:var(--text3)" title="${t.date.slice(0,10)} ~ ${t.end_date.slice(0,10)}">↔</span>` : '';
@@ -206,7 +207,7 @@ function renderTaskChip(t, mode) {
       onclick="openEditTask(${t.id})">
       <div class="task-check" onclick="event.stopPropagation();toggleTask(${t.id},${!t.completed})"></div>
       <div style="flex:1">
-        <div class="day-task-title">${escHtml(t.title)} ${multiDay}</div>
+        <div class="day-task-title">${escHtml(t.title)} ${multiDay} ${heart}</div>
         <div class="day-task-meta">
           ${catDot}
           ${t.category_name ? `<span>${escHtml(t.category_name)}</span>` : ''}
@@ -224,7 +225,7 @@ function renderTaskChip(t, mode) {
       onclick="openEditTask(${t.id})">
       <div class="task-check" onclick="event.stopPropagation();toggleTask(${t.id},${!t.completed})"></div>
       ${catDot}
-      <span class="task-text">${escHtml(t.title)}${timeHint ? ' '+timeHint : ''}</span>
+      <span class="task-text">${escHtml(t.title)}${timeHint ? ' '+timeHint : ''} ${heart}</span>
     </div>`;
   }
 
@@ -235,7 +236,7 @@ function renderTaskChip(t, mode) {
     onclick="openEditTask(${t.id})">
     <div class="task-check" onclick="event.stopPropagation();toggleTask(${t.id},${!t.completed})"></div>
     ${catDot}
-    <span class="task-text">${escHtml(t.title)}</span>
+    <span class="task-text">${escHtml(t.title)} ${heart}</span>
   </div>`;
 }
 

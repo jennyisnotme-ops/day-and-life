@@ -9,6 +9,7 @@ function openAddTaskOnDate(dateStr) {
   document.getElementById('task-date').value = dateStr;
   document.getElementById('task-end-date').value = '';
   document.getElementById('task-title').value = '';
+  document.getElementById('task-notes').value = '';
   document.getElementById('task-time').value = '';
   document.getElementById('task-repeat').value = 'none';
   populateTaskCalendarSelect();
@@ -26,6 +27,7 @@ function openEditTask(taskId) {
   document.getElementById('task-date').value = task.date.slice(0,10);
   document.getElementById('task-end-date').value = task.end_date ? task.end_date.slice(0,10) : '';
   document.getElementById('task-title').value = task.title;
+  document.getElementById('task-notes').value = task.notes || '';
   document.getElementById('task-time').value = task.time_hint || '';
   document.getElementById('task-repeat').value = task.repeat_type || 'none';
   populateTaskCalendarSelect(task.calendar_id);
@@ -61,14 +63,15 @@ async function saveTask() {
   const categoryId = document.getElementById('task-category').value ? parseInt(document.getElementById('task-category').value) : null;
   const timeHint = document.getElementById('task-time').value || null;
   const repeatType = document.getElementById('task-repeat').value;
+  const notes = document.getElementById('task-notes').value.trim() || null;
 
   try {
     if (_editingTaskId) {
-      const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType });
+      const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType, notes });
       const idx = S.tasks.findIndex(t => t.id === _editingTaskId);
       if (idx >= 0) S.tasks[idx] = { ...S.tasks[idx], ...updated };
     } else {
-      const newTask = await API.createTask({ calendar_id: calendarId, category_id: categoryId, title, date, end_date: endDate, time_hint: timeHint, repeat_type: repeatType });
+      const newTask = await API.createTask({ calendar_id: calendarId, category_id: categoryId, title, date, end_date: endDate, time_hint: timeHint, repeat_type: repeatType, notes });
       S.tasks.push(newTask);
     }
     closeModal('modal-add-task');

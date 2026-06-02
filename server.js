@@ -249,15 +249,15 @@ app.get('/api/tasks', auth, async (req, res) => {
 });
 
 app.post('/api/tasks', auth, async (req, res) => {
-  const { calendar_id, category_id, title, date, end_date, time_hint, repeat_type, assigned_to } = req.body;
+  const { calendar_id, category_id, title, date, end_date, time_hint, repeat_type, assigned_to, notes } = req.body;
   const { rows: orderRows } = await pool.query(
     'SELECT COALESCE(MAX(sort_order),0)+1 as next FROM dal_tasks WHERE calendar_id=$1 AND date=$2',
     [calendar_id, date]
   );
   const { rows } = await pool.query(`
-    INSERT INTO dal_tasks(calendar_id,created_by,assigned_to,category_id,title,date,end_date,time_hint,sort_order,repeat_type)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
-  `, [calendar_id, req.session.userId, assigned_to || req.session.userId, category_id || null, title, date, end_date || null, time_hint || null, orderRows[0].next, repeat_type || 'none']);
+    INSERT INTO dal_tasks(calendar_id,created_by,assigned_to,category_id,title,date,end_date,time_hint,sort_order,repeat_type,notes)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
+  `, [calendar_id, req.session.userId, assigned_to || req.session.userId, category_id || null, title, date, end_date || null, time_hint || null, orderRows[0].next, repeat_type || 'none', notes || null]);
   const task = rows[0];
   if (task.category_id) {
     const cat = await pool.query('SELECT name,color FROM dal_categories WHERE id=$1', [task.category_id]);
@@ -269,7 +269,7 @@ app.post('/api/tasks', auth, async (req, res) => {
 
 app.patch('/api/tasks/:id', auth, async (req, res) => {
   const id = parseInt(req.params.id);
-  const { title, category_id, date, end_date, time_hint, completed, assigned_to } = req.body;
+  const { title, category_id, date, end_date, time_hint, completed, assigned_to, notes } = req.body;
   const { rows: cur } = await pool.query('SELECT * FROM dal_tasks WHERE id=$1', [id]);
   if (!cur[0]) return res.status(404).json({ error: 'Not found' });
 
@@ -285,10 +285,11 @@ app.patch('/api/tasks/:id', auth, async (req, res) => {
     completed=COALESCE($7,completed),
     completed_at=CASE WHEN $7=true THEN NOW() WHEN $7=false THEN NULL ELSE completed_at END,
     assigned_to=COALESCE($8,assigned_to),
-    move_count=$9,
+    notes=CASE WHEN $10::text IS NULL THEN notes ELSE $10 END,
+    move_count=$11,
     updated_at=NOW()
-    WHERE id=$11`,
-    [title, category_id, category_id === null, date, end_date || null, time_hint, completed, assigned_to, moveCount, end_date === null, id]
+    WHERE id=$12`,
+    [title, category_id, category_id === null, date, end_date || null, time_hint, completed, assigned_to, notes !== undefined ? (notes || null) : null, moveCount, end_date === null, id]
   );
 
   const { rows } = await pool.query(`
@@ -390,6 +391,7 @@ async function initDb() {
   await pool.query(schema);
   // migrations
   await pool.query(`ALTER TABLE dal_tasks ADD COLUMN IF NOT EXISTS end_date DATE`);
+  await pool.query(`ALTER TABLE dal_tasks ADD COLUMN IF NOT EXISTS notes TEXT`);
 
   const { rows } = await pool.query('SELECT COUNT(*) FROM dal_users');
   if (rows[0].count === '0') {
