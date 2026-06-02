@@ -1,4 +1,4 @@
-const CACHE = 'day-and-life-v3';
+const CACHE = 'day-and-life-v4';
 const ASSETS = ['/', '/css/base.css', '/css/app.css', '/js/config.js', '/js/api.js', '/js/state.js', '/js/views.js', '/js/drag.js', '/js/modal.js', '/js/stats.js', '/js/settings.js', '/js/main.js'];
 
 self.addEventListener('install', e => {
