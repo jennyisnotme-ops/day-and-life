@@ -99,7 +99,15 @@ app.post('/api/users', adminOnly, async (req, res) => {
     'INSERT INTO dal_users(username,password_hash,display_name,avatar_color,is_admin) VALUES($1,$2,$3,$4,$5) RETURNING id,username,display_name,avatar_color,is_admin',
     [username, hash, display_name, avatar_color || '#2563eb', !!is_admin]
   );
-  res.json(rows[0]);
+  const newUser = rows[0];
+  // auto-create a default calendar for the new user
+  const cal = await pool.query(
+    "INSERT INTO dal_calendars(name,color,owner_id) VALUES('我的行事曆',$1,$2) RETURNING id",
+    [avatar_color || '#2563eb', newUser.id]
+  );
+  await pool.query('INSERT INTO dal_calendar_members(calendar_id,user_id,role) VALUES($1,$2,$3)',
+    [cal.rows[0].id, newUser.id, 'admin']);
+  res.json(newUser);
 });
 
 app.patch('/api/users/:id', adminOnly, async (req, res) => {
@@ -293,6 +301,25 @@ app.patch('/api/tasks/:id', auth, async (req, res) => {
 app.delete('/api/tasks/:id', auth, async (req, res) => {
   await pool.query('DELETE FROM dal_tasks WHERE id=$1', [parseInt(req.params.id)]);
   res.json({ ok: true });
+});
+
+// one-time migration: create default calendar for users who don't have one
+app.post('/api/admin/fix-missing-calendars', auth, async (req, res) => {
+  const { rows: ur } = await pool.query('SELECT is_admin FROM dal_users WHERE id=$1', [req.session.userId]);
+  if (!ur[0]?.is_admin) return res.status(403).json({ error: 'admin only' });
+  const { rows: users } = await pool.query(`
+    SELECT u.id, u.display_name, u.avatar_color FROM dal_users u
+    WHERE NOT EXISTS (SELECT 1 FROM dal_calendar_members cm WHERE cm.user_id=u.id)
+  `);
+  for (const u of users) {
+    const cal = await pool.query(
+      "INSERT INTO dal_calendars(name,color,owner_id) VALUES('我的行事曆',$1,$2) RETURNING id",
+      [u.avatar_color || '#2563eb', u.id]
+    );
+    await pool.query('INSERT INTO dal_calendar_members(calendar_id,user_id,role) VALUES($1,$2,$3)',
+      [cal.rows[0].id, u.id, 'admin']);
+  }
+  res.json({ fixed: users.length });
 });
 
 // one-time migration: fix task dates shifted by timezone bug (adds 1 day to all tasks)
