@@ -24,7 +24,7 @@ function openEditTask(taskId) {
   _editingTaskId = taskId;
   document.getElementById('task-modal-title').textContent = '編輯任務';
   document.getElementById('task-delete-btn').style.display = '';
-  document.getElementById('task-date').value = task.date.slice(0,10);
+  document.getElementById('task-date').value = task.date ? task.date.slice(0,10) : '';
   document.getElementById('task-end-date').value = task.end_date ? task.end_date.slice(0,10) : '';
   document.getElementById('task-title').value = task.title;
   document.getElementById('task-notes').value = task.notes || '';
