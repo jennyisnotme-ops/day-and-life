@@ -124,6 +124,14 @@ function openAddInboxTask() {
   setTimeout(() => document.getElementById('task-title').focus(), 80);
 }
 
+async function deleteInboxTask(taskId) {
+  if (!confirm('確定刪除這個事項？')) return;
+  await API.deleteTask(taskId);
+  S.inbox = S.inbox.filter(t => t.id !== taskId);
+  renderInbox();
+  showToast('已刪除');
+}
+
 function renderInbox() {
   const list = document.getElementById('inbox-list');
   if (!list) return;
@@ -135,10 +143,10 @@ function renderInbox() {
     const heart = t.notes ? `<span style="font-size:9px;color:#f43f5e">♥</span>` : '';
     const dot = t.category_color ? `<span style="width:6px;height:6px;border-radius:50%;background:${t.category_color};flex-shrink:0;margin-top:3px;display:inline-block"></span>` : '';
     return `<div class="inbox-task" draggable="true" data-id="${t.id}"
-      ondragstart="onInboxDragStart(event,${t.id})"
-      onclick="openEditTask(${t.id})">
+      ondragstart="onInboxDragStart(event,${t.id})">
       ${dot}
-      <span style="flex:1;word-break:break-all">${escHtml(t.title)} ${heart}</span>
+      <span style="flex:1;word-break:break-all;cursor:pointer" onclick="openEditTask(${t.id})">${escHtml(t.title)} ${heart}</span>
+      <button onclick="deleteInboxTask(${t.id})" style="border:none;background:none;color:#ef4444;font-size:13px;cursor:pointer;padding:0 2px;flex-shrink:0" title="刪除">✕</button>
     </div>`;
   }).join('');
 }
