@@ -276,20 +276,21 @@ app.patch('/api/tasks/:id', auth, async (req, res) => {
   let moveCount = cur[0].move_count;
   if (date !== undefined && date !== cur[0].date) moveCount++;
 
+  // $1=title $2=cat_id $3=cat_null $4=date $5=end_date $6=end_date_null $7=time_hint $8=completed $9=assigned_to $10=notes $11=notes_provided $12=moveCount $13=id
   await pool.query(`UPDATE dal_tasks SET
     title=COALESCE($1,title),
-    category_id=CASE WHEN $2::int IS NULL AND $3=true THEN NULL ELSE COALESCE($2::int,category_id) END,
+    category_id=CASE WHEN $2::int IS NULL AND $3 THEN NULL ELSE COALESCE($2::int,category_id) END,
     date=COALESCE($4,date),
-    end_date=CASE WHEN $5::date IS NULL AND $10=true THEN NULL ELSE COALESCE($5::date,end_date) END,
-    time_hint=COALESCE($6,time_hint),
-    completed=COALESCE($7,completed),
-    completed_at=CASE WHEN $7=true THEN NOW() WHEN $7=false THEN NULL ELSE completed_at END,
-    assigned_to=COALESCE($8,assigned_to),
-    notes=CASE WHEN $10::text IS NULL THEN notes ELSE $10 END,
-    move_count=$11,
+    end_date=CASE WHEN $6 THEN NULL ELSE COALESCE($5::date,end_date) END,
+    time_hint=COALESCE($7,time_hint),
+    completed=COALESCE($8,completed),
+    completed_at=CASE WHEN $8=true THEN NOW() WHEN $8=false THEN NULL ELSE completed_at END,
+    assigned_to=COALESCE($9,assigned_to),
+    notes=CASE WHEN $11 THEN $10 ELSE notes END,
+    move_count=$12,
     updated_at=NOW()
-    WHERE id=$12`,
-    [title, category_id, category_id === null, date, end_date || null, time_hint, completed, assigned_to, notes !== undefined ? (notes || null) : null, moveCount, end_date === null, id]
+    WHERE id=$13`,
+    [title, category_id, category_id === null, date, end_date || null, end_date === null && end_date !== undefined, time_hint, completed, assigned_to, notes || null, notes !== undefined, moveCount, id]
   );
 
   const { rows } = await pool.query(`
