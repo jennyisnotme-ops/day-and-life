@@ -19,8 +19,11 @@ function getVisibleCalIds() {
 }
 
 function getTasksForDate(dateStr) {
-  return S.tasks.filter(t => t.date === dateStr || t.date.slice(0,10) === dateStr)
-    .sort((a,b) => a.sort_order - b.sort_order);
+  return S.tasks.filter(t => {
+    const start = t.date.slice(0,10);
+    const end = t.end_date ? t.end_date.slice(0,10) : start;
+    return dateStr >= start && dateStr <= end;
+  }).sort((a,b) => a.sort_order - b.sort_order);
 }
 
 function getNoteForDate(calId, dateStr) {

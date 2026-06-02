@@ -196,6 +196,9 @@ function renderTaskChip(t, mode) {
     ? `<span class="task-cat-dot" style="background:${t.category_color}"></span>` : '';
   const timeHint = t.time_hint ? `<span style="color:var(--text3);font-size:10px">${t.time_hint}</span>` : '';
 
+  const multiDay = t.end_date && t.end_date.slice(0,10) !== t.date.slice(0,10)
+    ? `<span style="font-size:10px;color:var(--text3)" title="${t.date.slice(0,10)} ~ ${t.end_date.slice(0,10)}">↔</span>` : '';
+
   if (mode === 'day') {
     return `<div class="day-task-item${t.completed?' done':''}"
       draggable="true" data-id="${t.id}" data-date="${t.date}"
@@ -203,7 +206,7 @@ function renderTaskChip(t, mode) {
       onclick="openEditTask(${t.id})">
       <div class="task-check" onclick="event.stopPropagation();toggleTask(${t.id},${!t.completed})"></div>
       <div style="flex:1">
-        <div class="day-task-title">${escHtml(t.title)}</div>
+        <div class="day-task-title">${escHtml(t.title)} ${multiDay}</div>
         <div class="day-task-meta">
           ${catDot}
           ${t.category_name ? `<span>${escHtml(t.category_name)}</span>` : ''}

@@ -7,6 +7,7 @@ function openAddTaskOnDate(dateStr) {
   document.getElementById('task-modal-title').textContent = '新增任務';
   document.getElementById('task-delete-btn').style.display = 'none';
   document.getElementById('task-date').value = dateStr;
+  document.getElementById('task-end-date').value = '';
   document.getElementById('task-title').value = '';
   document.getElementById('task-time').value = '';
   document.getElementById('task-repeat').value = 'none';
@@ -23,6 +24,7 @@ function openEditTask(taskId) {
   document.getElementById('task-modal-title').textContent = '編輯任務';
   document.getElementById('task-delete-btn').style.display = '';
   document.getElementById('task-date').value = task.date.slice(0,10);
+  document.getElementById('task-end-date').value = task.end_date ? task.end_date.slice(0,10) : '';
   document.getElementById('task-title').value = task.title;
   document.getElementById('task-time').value = task.time_hint || '';
   document.getElementById('task-repeat').value = task.repeat_type || 'none';
@@ -53,6 +55,8 @@ async function saveTask() {
   if (!title) { showToast('請輸入任務內容'); return; }
   const date = document.getElementById('task-date').value;
   if (!date) { showToast('請選擇日期'); return; }
+  const endDate = document.getElementById('task-end-date').value || null;
+  if (endDate && endDate < date) { showToast('結束日期不能早於開始日期'); return; }
   const calendarId = parseInt(document.getElementById('task-calendar').value);
   const categoryId = document.getElementById('task-category').value ? parseInt(document.getElementById('task-category').value) : null;
   const timeHint = document.getElementById('task-time').value || null;
@@ -60,11 +64,11 @@ async function saveTask() {
 
   try {
     if (_editingTaskId) {
-      const updated = await API.updateTask(_editingTaskId, { title, date, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType });
+      const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType });
       const idx = S.tasks.findIndex(t => t.id === _editingTaskId);
       if (idx >= 0) S.tasks[idx] = { ...S.tasks[idx], ...updated };
     } else {
-      const newTask = await API.createTask({ calendar_id: calendarId, category_id: categoryId, title, date, time_hint: timeHint, repeat_type: repeatType });
+      const newTask = await API.createTask({ calendar_id: calendarId, category_id: categoryId, title, date, end_date: endDate, time_hint: timeHint, repeat_type: repeatType });
       S.tasks.push(newTask);
     }
     closeModal('modal-add-task');

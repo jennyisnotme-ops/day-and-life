@@ -232,22 +232,24 @@ app.get('/api/tasks', auth, async (req, res) => {
     FROM dal_tasks t
     LEFT JOIN dal_categories cat ON cat.id=t.category_id
     LEFT JOIN dal_users u ON u.id=t.assigned_to
-    WHERE t.calendar_id = ANY($1) AND t.date BETWEEN $2 AND $3
+    WHERE t.calendar_id = ANY($1)
+      AND t.date <= $3
+      AND COALESCE(t.end_date, t.date) >= $2
     ORDER BY t.date, t.sort_order, t.id
   `, [ids, date_from, date_to]);
   res.json(rows);
 });
 
 app.post('/api/tasks', auth, async (req, res) => {
-  const { calendar_id, category_id, title, date, time_hint, repeat_type, assigned_to } = req.body;
+  const { calendar_id, category_id, title, date, end_date, time_hint, repeat_type, assigned_to } = req.body;
   const { rows: orderRows } = await pool.query(
     'SELECT COALESCE(MAX(sort_order),0)+1 as next FROM dal_tasks WHERE calendar_id=$1 AND date=$2',
     [calendar_id, date]
   );
   const { rows } = await pool.query(`
-    INSERT INTO dal_tasks(calendar_id,created_by,assigned_to,category_id,title,date,time_hint,sort_order,repeat_type)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
-  `, [calendar_id, req.session.userId, assigned_to || req.session.userId, category_id || null, title, date, time_hint || null, orderRows[0].next, repeat_type || 'none']);
+    INSERT INTO dal_tasks(calendar_id,created_by,assigned_to,category_id,title,date,end_date,time_hint,sort_order,repeat_type)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
+  `, [calendar_id, req.session.userId, assigned_to || req.session.userId, category_id || null, title, date, end_date || null, time_hint || null, orderRows[0].next, repeat_type || 'none']);
   const task = rows[0];
   if (task.category_id) {
     const cat = await pool.query('SELECT name,color FROM dal_categories WHERE id=$1', [task.category_id]);
@@ -259,7 +261,7 @@ app.post('/api/tasks', auth, async (req, res) => {
 
 app.patch('/api/tasks/:id', auth, async (req, res) => {
   const id = parseInt(req.params.id);
-  const { title, category_id, date, time_hint, completed, assigned_to } = req.body;
+  const { title, category_id, date, end_date, time_hint, completed, assigned_to } = req.body;
   const { rows: cur } = await pool.query('SELECT * FROM dal_tasks WHERE id=$1', [id]);
   if (!cur[0]) return res.status(404).json({ error: 'Not found' });
 
@@ -270,14 +272,15 @@ app.patch('/api/tasks/:id', auth, async (req, res) => {
     title=COALESCE($1,title),
     category_id=CASE WHEN $2::int IS NULL AND $3=true THEN NULL ELSE COALESCE($2::int,category_id) END,
     date=COALESCE($4,date),
-    time_hint=COALESCE($5,time_hint),
-    completed=COALESCE($6,completed),
-    completed_at=CASE WHEN $6=true THEN NOW() WHEN $6=false THEN NULL ELSE completed_at END,
-    assigned_to=COALESCE($7,assigned_to),
-    move_count=$8,
+    end_date=CASE WHEN $5::date IS NULL AND $10=true THEN NULL ELSE COALESCE($5::date,end_date) END,
+    time_hint=COALESCE($6,time_hint),
+    completed=COALESCE($7,completed),
+    completed_at=CASE WHEN $7=true THEN NOW() WHEN $7=false THEN NULL ELSE completed_at END,
+    assigned_to=COALESCE($8,assigned_to),
+    move_count=$9,
     updated_at=NOW()
-    WHERE id=$9`,
-    [title, category_id, category_id === null, date, time_hint, completed, assigned_to, moveCount, id]
+    WHERE id=$11`,
+    [title, category_id, category_id === null, date, end_date || null, time_hint, completed, assigned_to, moveCount, end_date === null, id]
   );
 
   const { rows } = await pool.query(`
@@ -358,6 +361,8 @@ async function initDb() {
   const fs = require('fs');
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   await pool.query(schema);
+  // migrations
+  await pool.query(`ALTER TABLE dal_tasks ADD COLUMN IF NOT EXISTS end_date DATE`);
 
   const { rows } = await pool.query('SELECT COUNT(*) FROM dal_users');
   if (rows[0].count === '0') {
