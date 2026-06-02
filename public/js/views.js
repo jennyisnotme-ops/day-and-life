@@ -236,7 +236,7 @@ function renderTaskChip(t, mode) {
     onclick="openEditTask(${t.id})">
     <div class="task-check" onclick="event.stopPropagation();toggleTask(${t.id},${!t.completed})"></div>
     ${catDot}
-    <span class="task-text">${escHtml(t.title)} ${heart}</span>
+    <span class="task-text">${timeHint ? `<span style="color:var(--accent);font-size:9px;font-weight:600">${t.time_hint}</span> ` : ''}${escHtml(t.title)} ${heart}</span>
   </div>`;
 }
 
