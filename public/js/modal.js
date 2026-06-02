@@ -19,7 +19,7 @@ function openAddTaskOnDate(dateStr) {
 }
 
 function openEditTask(taskId) {
-  const task = S.tasks.find(t => t.id === taskId);
+  const task = S.tasks.find(t => t.id === taskId) || S.inbox.find(t => t.id === taskId);
   if (!task) return;
   _editingTaskId = taskId;
   document.getElementById('task-modal-title').textContent = '編輯任務';
