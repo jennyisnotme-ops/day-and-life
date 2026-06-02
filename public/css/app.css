@@ -306,7 +306,6 @@
     position:fixed;inset:0;width:100%;z-index:90;
     border-left:none;box-shadow:var(--shadow-lg);
   }
-  #inbox-toggle-btn{display:inline-flex !important}
 }
 
 /* ── Drag placeholder ──────────────────────────────────────────────── */
