@@ -49,6 +49,8 @@ function showApp() {
   if (window.innerWidth <= 768) {
     document.getElementById('mobile-menu-btn').style.display = '';
     document.getElementById('sidebar-close-btn').style.display = '';
+    document.getElementById('mobile-inbox-fab').style.display = 'flex';
+    document.getElementById('inbox-toggle-btn').style.display = 'none';
   }
   renderApp();
 }
