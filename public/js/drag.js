@@ -1,14 +1,45 @@
 'use strict';
 let _dragId = null;
 let _dragSrcDate = null;
+let _dragFromInbox = false;
 
 function onDragStart(e, taskId) {
   _dragId = taskId;
+  _dragFromInbox = false;
   const el = e.currentTarget;
   _dragSrcDate = el.dataset.date;
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', taskId);
   setTimeout(() => el.classList.add('dragging'), 0);
+}
+
+function onInboxDragStart(e, taskId) {
+  _dragId = taskId;
+  _dragFromInbox = true;
+  _dragSrcDate = null;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', taskId);
+  setTimeout(() => e.currentTarget.classList.add('dragging'), 0);
+}
+
+function onInboxDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+async function onInboxDrop(e) {
+  e.preventDefault();
+  // drag calendar task back to inbox (remove date)
+  if (!_dragId || _dragFromInbox) return;
+  const taskId = _dragId; _dragId = null;
+  document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+  try {
+    await API.updateTask(taskId, { date: null });
+    showToast('已移入事項口袋');
+    await reloadData();
+    renderApp();
+    renderInbox();
+  } catch(err) { showToast('失敗：' + err.message); }
 }
 
 function onDragOver(e) {
@@ -24,6 +55,21 @@ async function onDrop(e, targetDate) {
   _dragId = null;
 
   document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+
+  // from inbox → calendar
+  if (_dragFromInbox) {
+    _dragFromInbox = false;
+    const inboxTask = S.inbox.find(t => t.id === taskId);
+    if (!inboxTask) return;
+    try {
+      await API.updateTask(taskId, { date: targetDate });
+      showToast(`已排入 ${targetDate}`);
+      await reloadData();
+      renderApp();
+      renderInbox();
+    } catch(err) { showToast('失敗：' + err.message); }
+    return;
+  }
 
   const task = S.tasks.find(t => t.id === taskId);
   if (!task) return;

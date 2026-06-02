@@ -55,8 +55,7 @@ function populateTaskCategorySelect(calId, selectedCatId) {
 async function saveTask() {
   const title = document.getElementById('task-title').value.trim();
   if (!title) { showToast('請輸入任務內容'); return; }
-  const date = document.getElementById('task-date').value;
-  if (!date) { showToast('請選擇日期'); return; }
+  const date = document.getElementById('task-date').value || null;
   const endDate = document.getElementById('task-end-date').value || null;
   if (endDate && endDate < date) { showToast('結束日期不能早於開始日期'); return; }
   const calendarId = parseInt(document.getElementById('task-calendar').value);
@@ -77,6 +76,7 @@ async function saveTask() {
     closeModal('modal-add-task');
     await reloadData();
     renderApp();
+    renderInbox();
     showToast(_editingTaskId ? '已更新' : '已新增');
   } catch (err) {
     showToast('錯誤：' + err.message);

@@ -103,6 +103,46 @@ function goToday() {
   reloadData().then(() => renderApp());
 }
 
+function toggleInbox() {
+  document.getElementById('inbox-panel').classList.toggle('open');
+  renderInbox();
+}
+
+function openAddInboxTask() {
+  _editingTaskId = null;
+  document.getElementById('task-modal-title').textContent = '新增至事項口袋';
+  document.getElementById('task-delete-btn').style.display = 'none';
+  document.getElementById('task-date').value = '';
+  document.getElementById('task-end-date').value = '';
+  document.getElementById('task-title').value = '';
+  document.getElementById('task-notes').value = '';
+  document.getElementById('task-time').value = '';
+  document.getElementById('task-repeat').value = 'none';
+  populateTaskCalendarSelect();
+  populateTaskCategorySelect();
+  openModal('add-task');
+  setTimeout(() => document.getElementById('task-title').focus(), 80);
+}
+
+function renderInbox() {
+  const list = document.getElementById('inbox-list');
+  if (!list) return;
+  if (!S.inbox.length) {
+    list.innerHTML = '<div class="inbox-empty">口袋是空的～<br>新增一些待安排事項吧！</div>';
+    return;
+  }
+  list.innerHTML = S.inbox.map(t => {
+    const heart = t.notes ? `<span style="font-size:9px;color:#f43f5e">♥</span>` : '';
+    const dot = t.category_color ? `<span style="width:6px;height:6px;border-radius:50%;background:${t.category_color};flex-shrink:0;margin-top:3px;display:inline-block"></span>` : '';
+    return `<div class="inbox-task" draggable="true" data-id="${t.id}"
+      ondragstart="onInboxDragStart(event,${t.id})"
+      onclick="openEditTask(${t.id})">
+      ${dot}
+      <span style="flex:1;word-break:break-all">${escHtml(t.title)} ${heart}</span>
+    </div>`;
+  }).join('');
+}
+
 function toggleSidebar() {
   const open = document.getElementById('sidebar').classList.toggle('mobile-open');
   document.getElementById('sidebar-overlay').classList.toggle('active', open);

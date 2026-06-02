@@ -5,12 +5,13 @@ const S = {
   visibleCalIds: [],
   categories: [],
   tasks: [],
+  inbox: [],
   notes: {},
   view: 'month',
   cursor: new Date(),
   themeAccent: '#2563eb',
   allUsers: [],
-  holidays: {},   // { "YYYY-MM-DD": { description, isHoliday } }
+  holidays: {},
   _holidayYears: new Set(),
 };
 
@@ -92,12 +93,19 @@ async function loadHolidaysForYear(year) {
   } catch(e) {}
 }
 
+async function loadInbox() {
+  const ids = getVisibleCalIds();
+  if (!ids.length) { S.inbox = []; return; }
+  S.inbox = await API.getInbox(ids);
+}
+
 async function reloadData() {
   const year = S.cursor.getFullYear();
   await Promise.all([
     loadTasksForView(),
     loadNotesForView(),
+    loadInbox(),
     loadHolidaysForYear(year),
-    loadHolidaysForYear(year + 1), // preload next year
+    loadHolidaysForYear(year + 1),
   ]);
 }

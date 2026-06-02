@@ -230,6 +230,20 @@ app.delete('/api/categories/:id', auth, async (req, res) => {
 });
 
 // ── Tasks ─────────────────────────────────────────────────────────────
+app.get('/api/inbox', auth, async (req, res) => {
+  const { calendar_ids } = req.query;
+  const ids = (calendar_ids || '').split(',').map(Number).filter(Boolean);
+  if (!ids.length) return res.json([]);
+  const { rows } = await pool.query(`
+    SELECT t.*, cat.name as category_name, cat.color as category_color
+    FROM dal_tasks t
+    LEFT JOIN dal_categories cat ON cat.id=t.category_id
+    WHERE t.calendar_id = ANY($1) AND t.date IS NULL
+    ORDER BY t.sort_order, t.id
+  `, [ids]);
+  res.json(rows);
+});
+
 app.get('/api/tasks', auth, async (req, res) => {
   const { calendar_ids, date_from, date_to } = req.query;
   const ids = (calendar_ids || '').split(',').map(Number).filter(Boolean);
@@ -251,13 +265,13 @@ app.get('/api/tasks', auth, async (req, res) => {
 app.post('/api/tasks', auth, async (req, res) => {
   const { calendar_id, category_id, title, date, end_date, time_hint, repeat_type, assigned_to, notes } = req.body;
   const { rows: orderRows } = await pool.query(
-    'SELECT COALESCE(MAX(sort_order),0)+1 as next FROM dal_tasks WHERE calendar_id=$1 AND date=$2',
-    [calendar_id, date]
+    'SELECT COALESCE(MAX(sort_order),0)+1 as next FROM dal_tasks WHERE calendar_id=$1 AND date IS NOT DISTINCT FROM $2',
+    [calendar_id, date || null]
   );
   const { rows } = await pool.query(`
     INSERT INTO dal_tasks(calendar_id,created_by,assigned_to,category_id,title,date,end_date,time_hint,sort_order,repeat_type,notes)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
-  `, [calendar_id, req.session.userId, assigned_to || req.session.userId, category_id || null, title, date, end_date || null, time_hint || null, orderRows[0].next, repeat_type || 'none', notes || null]);
+  `, [calendar_id, req.session.userId, assigned_to || req.session.userId, category_id || null, title, date || null, end_date || null, time_hint || null, orderRows[0].next, repeat_type || 'none', notes || null]);
   const task = rows[0];
   if (task.category_id) {
     const cat = await pool.query('SELECT name,color FROM dal_categories WHERE id=$1', [task.category_id]);
@@ -280,7 +294,7 @@ app.patch('/api/tasks/:id', auth, async (req, res) => {
   await pool.query(`UPDATE dal_tasks SET
     title=COALESCE($1,title),
     category_id=CASE WHEN $2::int IS NULL AND $3 THEN NULL ELSE COALESCE($2::int,category_id) END,
-    date=COALESCE($4,date),
+    date=CASE WHEN $14=true THEN NULL ELSE COALESCE($4,date) END,
     end_date=CASE WHEN $6 THEN NULL ELSE COALESCE($5::date,end_date) END,
     time_hint=COALESCE($7,time_hint),
     completed=COALESCE($8,completed),
@@ -290,7 +304,7 @@ app.patch('/api/tasks/:id', auth, async (req, res) => {
     move_count=$12,
     updated_at=NOW()
     WHERE id=$13`,
-    [title, category_id, category_id === null, date, end_date || null, end_date === null && end_date !== undefined, time_hint, completed, assigned_to, notes || null, notes !== undefined, moveCount, id]
+    [title, category_id, category_id === null, date || null, end_date || null, end_date === null && end_date !== undefined, time_hint, completed, assigned_to, notes || null, notes !== undefined, moveCount, id, date === null && date !== undefined]
   );
 
   const { rows } = await pool.query(`

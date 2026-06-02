@@ -39,6 +39,7 @@ const API = {
   updateCategory: (id, data) => apiFetch(`/api/categories/${id}`, { method:'PATCH', body: data }),
   deleteCategory: (id) => apiFetch(`/api/categories/${id}`, { method:'DELETE' }),
 
+  getInbox: (calIds) => apiFetch(`/api/inbox?calendar_ids=${calIds.join(',')}`),
   getTasks: (calIds, dateFrom, dateTo) => apiFetch(`/api/tasks?calendar_ids=${calIds.join(',')}&date_from=${dateFrom}&date_to=${dateTo}`),
   createTask: (data) => apiFetch('/api/tasks', { method:'POST', body: data }),
   updateTask: (id, data) => apiFetch(`/api/tasks/${id}`, { method:'PATCH', body: data }),
