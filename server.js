@@ -407,6 +407,7 @@ async function initDb() {
   // migrations
   await pool.query(`ALTER TABLE dal_tasks ADD COLUMN IF NOT EXISTS end_date DATE`);
   await pool.query(`ALTER TABLE dal_tasks ADD COLUMN IF NOT EXISTS notes TEXT`);
+  await pool.query(`ALTER TABLE dal_tasks ALTER COLUMN date DROP NOT NULL`);
 
   const { rows } = await pool.query('SELECT COUNT(*) FROM dal_users');
   if (rows[0].count === '0') {
