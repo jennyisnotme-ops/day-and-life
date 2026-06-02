@@ -306,6 +306,19 @@
     position:fixed;inset:0;width:100%;z-index:90;
     border-left:none;box-shadow:var(--shadow-lg);
   }
+  #inbox-toggle-btn{display:none}
+  #mobile-inbox-fab{display:flex}
+}
+
+/* ── Mobile inbox FAB ──────────────────────────────────────────────── */
+#mobile-inbox-fab{
+  display:none;
+  position:fixed;bottom:24px;right:20px;z-index:85;
+  width:52px;height:52px;border-radius:50%;
+  background:var(--accent);color:#fff;
+  font-size:22px;border:none;cursor:pointer;
+  align-items:center;justify-content:center;
+  box-shadow:0 4px 16px rgba(0,0,0,.25);
 }
 
 /* ── Drag placeholder ──────────────────────────────────────────────── */
