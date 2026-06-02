@@ -48,6 +48,7 @@ function showApp() {
   document.getElementById('app').style.display = 'flex';
   if (window.innerWidth <= 768) {
     document.getElementById('mobile-menu-btn').style.display = '';
+    document.getElementById('sidebar-close-btn').style.display = '';
   }
   renderApp();
 }

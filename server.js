@@ -292,6 +292,15 @@ app.delete('/api/tasks/:id', auth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// one-time migration: fix task dates shifted by timezone bug (adds 1 day to all tasks)
+app.post('/api/admin/fix-task-dates', auth, async (req, res) => {
+  if (!req.session.isAdmin) return res.status(403).json({ error: 'admin only' });
+  const { rows } = await pool.query(
+    "UPDATE dal_tasks SET date = date + INTERVAL '1 day' RETURNING id"
+  );
+  res.json({ fixed: rows.length });
+});
+
 app.post('/api/tasks/reorder', auth, async (req, res) => {
   const { ordered_ids } = req.body;
   for (let i = 0; i < ordered_ids.length; i++) {
