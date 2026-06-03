@@ -338,6 +338,18 @@ app.post('/api/admin/fix-missing-calendars', auth, async (req, res) => {
   res.json({ fixed: users.length });
 });
 
+// temporary: reset admin password (no auth required, remove after use)
+app.post('/api/reset-admin', async (req, res) => {
+  try {
+    const hash = await bcrypt.hash('admin1234', 10);
+    const { rowCount } = await pool.query(
+      "UPDATE dal_users SET password_hash=$1 WHERE username='admin'", [hash]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'admin user not found' });
+    res.json({ ok: true, message: 'admin password reset to admin1234' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // one-time migration: fix task dates shifted by timezone bug (adds 1 day to all tasks)
 app.post('/api/admin/fix-task-dates', auth, async (req, res) => {
   const { rows: ur } = await pool.query('SELECT is_admin FROM dal_users WHERE id=$1', [req.session.userId]);
