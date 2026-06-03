@@ -338,6 +338,23 @@ app.post('/api/admin/fix-missing-calendars', auth, async (req, res) => {
   res.json({ fixed: users.length });
 });
 
+// temporary: DB diagnostic (no auth required, remove after use)
+app.get('/api/diag', async (req, res) => {
+  try {
+    const tables = await pool.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema='public' ORDER BY table_name
+    `);
+    const users = await pool.query('SELECT id, username, is_admin, created_at FROM dal_users ORDER BY id').catch(e => ({ rows: [], error: e.message }));
+    const sessions = await pool.query('SELECT COUNT(*) FROM dal_sessions').catch(e => ({ rows: [{ count: 'error: ' + e.message }] }));
+    res.json({
+      tables: tables.rows.map(r => r.table_name),
+      dal_users: users.rows || users.error,
+      dal_sessions_count: sessions.rows[0].count,
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // temporary: reset admin password (no auth required, remove after use)
 app.post('/api/reset-admin', async (req, res) => {
   try {
