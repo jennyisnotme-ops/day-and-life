@@ -433,6 +433,15 @@ async function initDb() {
   const fs = require('fs');
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   await pool.query(schema);
+  // ensure dal_sessions exists (connect-pg-simple schema)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dal_sessions (
+      sid VARCHAR NOT NULL COLLATE "default" PRIMARY KEY,
+      sess JSON NOT NULL,
+      expire TIMESTAMP(6) NOT NULL
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS IDX_dal_sessions_expire ON dal_sessions(expire)`);
   // migrations
   await pool.query(`ALTER TABLE dal_tasks ADD COLUMN IF NOT EXISTS end_date DATE`);
   await pool.query(`ALTER TABLE dal_tasks ADD COLUMN IF NOT EXISTS notes TEXT`);
