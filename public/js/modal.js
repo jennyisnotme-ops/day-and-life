@@ -73,13 +73,20 @@ async function saveTask() {
       const newTask = await API.createTask({ calendar_id: calendarId, category_id: categoryId, title, date, end_date: endDate, time_hint: timeHint, repeat_type: repeatType, notes });
       S.tasks.push(newTask);
     }
-    closeModal('modal-add-task');
+  } catch (err) {
+    console.error('saveTask error:', err);
+    showToast('錯誤：' + (err.message || String(err)));
+    return;
+  }
+  // 儲存成功後關閉 modal、刷新畫面（render 錯誤不影響儲存）
+  closeModal('modal-add-task');
+  showToast(_editingTaskId ? '已更新' : '已新增');
+  try {
     await reloadData();
     renderApp();
     renderInbox();
-    showToast(_editingTaskId ? '已更新' : '已新增');
-  } catch (err) {
-    showToast('錯誤：' + err.message);
+  } catch(e) {
+    console.error('render error after save:', e);
   }
 }
 
