@@ -2,16 +2,16 @@
 let _editingTaskId = null;
 let _pendingSave = null;
 
-async function doSaveSingleTask() {
+async function doSaveSingleTask(generateSeries = false) {
   closeModal('modal-small');
   const { title, date, endDate, calendarId, categoryId, timeHint, repeatType, repeatUntil, notes } = _pendingSave;
   try {
-    const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType, repeat_until: repeatUntil, notes });
+    const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType, repeat_until: repeatUntil, notes, generate_series: generateSeries });
     const idx = S.tasks.findIndex(t => t.id === _editingTaskId);
     if (idx >= 0) S.tasks[idx] = { ...S.tasks[idx], ...updated };
   } catch(err) { showToast('錯誤：' + err.message); return; }
   closeModal('modal-add-task');
-  showToast('已更新');
+  showToast(generateSeries ? '已更新並展開系列' : '已更新');
   try { await reloadData(); renderApp(); renderInbox(); } catch(e) { console.error(e); }
 }
 
@@ -97,16 +97,20 @@ async function saveTask() {
   try {
     if (_editingTaskId) {
       const task = S.tasks.find(t => t.id === _editingTaskId) || S.inbox.find(t => t.id === _editingTaskId);
-      if (task?.repeat_group_id) {
-        // 暫存資料，跳出選擇
-        _pendingSave = { title, date, endDate, calendarId, categoryId, timeHint, repeatType, repeatUntil, notes, groupId: task.repeat_group_id };
-        showSmallModal('編輯重複任務',
-          `<p style="margin:0;font-size:14px">「${escHtml(task.title)}」是重複任務，你要修改哪些？</p>
-           <p style="margin:8px 0 0;font-size:12px;color:var(--text3)">※ 修改整個系列只會更新標題、分類、時間、備註，不改各自的日期</p>`,
-          `<button class="btn" onclick="closeModal('modal-small')">取消</button>
-           <button class="btn btn-primary" onclick="doSaveSingleTask()">只改這筆</button>
-           <button class="btn btn-primary" onclick="doSaveTaskGroup()">整個系列</button>`
-        );
+      const hasGroup = task?.repeat_group_id;
+      const willGenerate = repeatType !== 'none' && repeatUntil;
+      if (hasGroup || willGenerate) {
+        _pendingSave = { title, date, endDate, calendarId, categoryId, timeHint, repeatType, repeatUntil, notes, groupId: task?.repeat_group_id };
+        const bodyMsg = hasGroup
+          ? `<p style="margin:0;font-size:14px">「${escHtml(task.title)}」是重複任務，你要修改哪些？</p>`
+          : `<p style="margin:0;font-size:14px">設定了重複頻率與結束日，要自動展開所有重複項目嗎？</p>`;
+        const footerBtns = hasGroup
+          ? `<button class="btn" onclick="closeModal('modal-small')">取消</button>
+             <button class="btn btn-primary" onclick="doSaveSingleTask()">只改這筆</button>
+             ${willGenerate ? `<button class="btn btn-primary" onclick="doSaveSingleTask(true)">重新展開系列</button>` : `<button class="btn btn-primary" onclick="doSaveTaskGroup()">整個系列</button>`}`
+          : `<button class="btn" onclick="doSaveSingleTask()">不用，只存這筆</button>
+             <button class="btn btn-primary" onclick="doSaveSingleTask(true)">是，展開系列</button>`;
+        showSmallModal('重複任務', bodyMsg, footerBtns);
         return;
       }
       const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType, repeat_until: repeatUntil, notes });

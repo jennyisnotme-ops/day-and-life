@@ -350,14 +350,13 @@ app.post('/api/tasks', auth, async (req, res) => {
 
 app.patch('/api/tasks/:id', auth, async (req, res) => {
   const id = parseInt(req.params.id);
-  const { title, category_id, date, end_date, time_hint, completed, assigned_to, notes } = req.body;
+  const { title, category_id, date, end_date, time_hint, completed, assigned_to, notes, repeat_type, repeat_until, generate_series } = req.body;
   const { rows: cur } = await pool.query('SELECT * FROM dal_tasks WHERE id=$1', [id]);
   if (!cur[0]) return res.status(404).json({ error: 'Not found' });
 
   let moveCount = cur[0].move_count;
   if (date !== undefined && date !== cur[0].date) moveCount++;
 
-  // $1=title $2=cat_id $3=cat_null $4=date $5=end_date $6=end_date_null $7=time_hint $8=completed $9=assigned_to $10=notes $11=notes_provided $12=moveCount $13=id
   await pool.query(`UPDATE dal_tasks SET
     title=COALESCE($1,title),
     category_id=CASE WHEN $2::int IS NULL AND $3 THEN NULL ELSE COALESCE($2::int,category_id) END,
@@ -369,10 +368,32 @@ app.patch('/api/tasks/:id', auth, async (req, res) => {
     assigned_to=COALESCE($9,assigned_to),
     notes=CASE WHEN $11 THEN $10 ELSE notes END,
     move_count=$12,
+    repeat_type=COALESCE($15,repeat_type),
+    repeat_until=COALESCE($16::date,repeat_until),
     updated_at=NOW()
     WHERE id=$13`,
-    [title, category_id, category_id === null, date || null, end_date || null, end_date === null && end_date !== undefined, time_hint, completed, assigned_to, notes || null, notes !== undefined, moveCount, id, date === null && date !== undefined]
+    [title, category_id, category_id === null, date || null, end_date || null, end_date === null && end_date !== undefined, time_hint, completed, assigned_to, notes || null, notes !== undefined, moveCount, id, date === null && date !== undefined, repeat_type || null, repeat_until || null]
   );
+
+  // if generate_series=true, rebuild all future instances from this task's date
+  if (generate_series && repeat_type && repeat_type !== 'none' && repeat_until) {
+    const taskDate = date || cur[0].date;
+    const groupId = cur[0].repeat_group_id || id;
+    // delete old future instances (keep this one)
+    if (cur[0].repeat_group_id) {
+      await pool.query('DELETE FROM dal_tasks WHERE repeat_group_id=$1 AND id!=$2', [groupId, id]);
+    }
+    await pool.query('UPDATE dal_tasks SET repeat_group_id=$1 WHERE id=$2', [groupId, id]);
+    let curDate = nextRepeatDate(taskDate, repeat_type);
+    const until = new Date(repeat_until);
+    while (curDate <= until) {
+      const ds = curDate.toISOString().slice(0,10);
+      await pool.query(`INSERT INTO dal_tasks(calendar_id,created_by,assigned_to,category_id,title,date,time_hint,sort_order,repeat_type,repeat_until,repeat_group_id,notes)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [cur[0].calendar_id, req.session.userId, cur[0].assigned_to, category_id ?? cur[0].category_id, title || cur[0].title, ds, time_hint ?? cur[0].time_hint, 0, repeat_type, repeat_until, groupId, notes ?? cur[0].notes]);
+      curDate = nextRepeatDate(curDate, repeat_type);
+    }
+  }
 
   const { rows } = await pool.query(`
     SELECT t.*, cat.name as category_name, cat.color as category_color
