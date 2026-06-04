@@ -1,5 +1,30 @@
 'use strict';
 let _editingTaskId = null;
+let _pendingSave = null;
+
+async function doSaveSingleTask() {
+  closeModal('modal-small');
+  const { title, date, endDate, calendarId, categoryId, timeHint, repeatType, repeatUntil, notes } = _pendingSave;
+  try {
+    const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType, repeat_until: repeatUntil, notes });
+    const idx = S.tasks.findIndex(t => t.id === _editingTaskId);
+    if (idx >= 0) S.tasks[idx] = { ...S.tasks[idx], ...updated };
+  } catch(err) { showToast('錯誤：' + err.message); return; }
+  closeModal('modal-add-task');
+  showToast('已更新');
+  try { await reloadData(); renderApp(); renderInbox(); } catch(e) { console.error(e); }
+}
+
+async function doSaveTaskGroup() {
+  closeModal('modal-small');
+  const { title, categoryId, timeHint, notes, groupId } = _pendingSave;
+  try {
+    await API.updateTaskGroup(groupId, { title, category_id: categoryId, time_hint: timeHint, notes });
+  } catch(err) { showToast('錯誤：' + err.message); return; }
+  closeModal('modal-add-task');
+  showToast('已更新整個系列');
+  try { await reloadData(); renderApp(); renderInbox(); } catch(e) { console.error(e); }
+}
 
 // ── Task Modal ──────────────────────────────────────────────────────
 function openAddTaskOnDate(dateStr) {
@@ -71,6 +96,19 @@ async function saveTask() {
 
   try {
     if (_editingTaskId) {
+      const task = S.tasks.find(t => t.id === _editingTaskId) || S.inbox.find(t => t.id === _editingTaskId);
+      if (task?.repeat_group_id) {
+        // 暫存資料，跳出選擇
+        _pendingSave = { title, date, endDate, calendarId, categoryId, timeHint, repeatType, repeatUntil, notes, groupId: task.repeat_group_id };
+        showSmallModal('編輯重複任務',
+          `<p style="margin:0;font-size:14px">「${escHtml(task.title)}」是重複任務，你要修改哪些？</p>
+           <p style="margin:8px 0 0;font-size:12px;color:var(--text3)">※ 修改整個系列只會更新標題、分類、時間、備註，不改各自的日期</p>`,
+          `<button class="btn" onclick="closeModal('modal-small')">取消</button>
+           <button class="btn btn-primary" onclick="doSaveSingleTask()">只改這筆</button>
+           <button class="btn btn-primary" onclick="doSaveTaskGroup()">整個系列</button>`
+        );
+        return;
+      }
       const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType, repeat_until: repeatUntil, notes });
       const idx = S.tasks.findIndex(t => t.id === _editingTaskId);
       if (idx >= 0) S.tasks[idx] = { ...S.tasks[idx], ...updated };
@@ -97,13 +135,37 @@ async function saveTask() {
 
 async function deleteCurrentTask() {
   if (!_editingTaskId) return;
-  if (!confirm('確定刪除這個任務？')) return;
+  const task = S.tasks.find(t => t.id === _editingTaskId) || S.inbox.find(t => t.id === _editingTaskId);
+  if (task?.repeat_group_id) {
+    showSmallModal('刪除重複任務',
+      `<p style="margin:0;font-size:14px">「${escHtml(task.title)}」是重複任務，你要刪除哪些？</p>`,
+      `<button class="btn" onclick="closeModal('modal-small')">取消</button>
+       <button class="btn btn-danger" onclick="doDeleteSingleTask()">只刪這筆</button>
+       <button class="btn btn-danger" onclick="doDeleteTaskGroup(${task.repeat_group_id})">刪整個系列</button>`
+    );
+  } else {
+    if (!confirm('確定刪除這個任務？')) return;
+    await doDeleteSingleTask();
+  }
+}
+
+async function doDeleteSingleTask() {
+  closeModal('modal-small');
   await API.deleteTask(_editingTaskId);
   S.tasks = S.tasks.filter(t => t.id !== _editingTaskId);
   closeModal('modal-add-task');
   await reloadData();
   renderApp();
   showToast('已刪除');
+}
+
+async function doDeleteTaskGroup(groupId) {
+  closeModal('modal-small');
+  await API.deleteTaskGroup(groupId);
+  closeModal('modal-add-task');
+  await reloadData();
+  renderApp();
+  showToast('已刪除整個系列');
 }
 
 async function toggleTask(taskId, completed) {

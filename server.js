@@ -386,6 +386,29 @@ app.delete('/api/tasks/:id', auth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// delete entire repeat group
+app.delete('/api/tasks/group/:groupId', auth, async (req, res) => {
+  const groupId = parseInt(req.params.groupId);
+  const { rowCount } = await pool.query('DELETE FROM dal_tasks WHERE repeat_group_id=$1', [groupId]);
+  res.json({ deleted: rowCount });
+});
+
+// update entire repeat group (title, category, time_hint, notes only — not date)
+app.patch('/api/tasks/group/:groupId', auth, async (req, res) => {
+  const groupId = parseInt(req.params.groupId);
+  const { title, category_id, time_hint, notes } = req.body;
+  await pool.query(`UPDATE dal_tasks SET
+    title=COALESCE($1,title),
+    category_id=CASE WHEN $2::int IS NULL AND $3 THEN NULL ELSE COALESCE($2::int,category_id) END,
+    time_hint=COALESCE($4,time_hint),
+    notes=CASE WHEN $5 THEN $6 ELSE notes END,
+    updated_at=NOW()
+    WHERE repeat_group_id=$7`,
+    [title, category_id, category_id === null, time_hint, notes !== undefined, notes || null, groupId]
+  );
+  res.json({ ok: true });
+});
+
 // one-time migration: create default calendar for users who don't have one
 app.post('/api/admin/fix-missing-calendars', auth, async (req, res) => {
   const { rows: ur } = await pool.query('SELECT is_admin FROM dal_users WHERE id=$1', [req.session.userId]);
