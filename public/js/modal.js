@@ -271,7 +271,7 @@ function openAddUser() {
   showSmallModal('新增帳號',
     `<div><label>帳號</label><input type="text" id="sm-user-name" autocomplete="off"/></div>
      <div><label>顯示名稱</label><input type="text" id="sm-user-display"/></div>
-     <div><label>初始密碼</label><input type="password" id="sm-user-pass"/></div>
+     <div><label>初始密碼</label><div class="pw-wrap"><input type="password" id="sm-user-pass"/><button type="button" class="pw-eye" onclick="togglePw('sm-user-pass',this)" tabindex="-1">🙈</button></div></div>
      <div style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="sm-user-admin" style="width:auto"/><label style="display:inline;margin:0">管理員權限</label></div>`,
     `<button class="btn" onclick="closeModal('modal-small')">取消</button>
      <button class="btn btn-primary" onclick="doAddUser()">新增</button>`
@@ -296,9 +296,9 @@ async function doAddUser() {
 // Change password
 function openChangePassword() {
   showSmallModal('修改密碼',
-    `<div><label>目前密碼</label><input type="password" id="sm-cur-pass"/></div>
-     <div><label>新密碼</label><input type="password" id="sm-new-pass"/></div>
-     <div><label>確認新密碼</label><input type="password" id="sm-new-pass2"/></div>`,
+    `<div><label>目前密碼</label><div class="pw-wrap"><input type="password" id="sm-cur-pass"/><button type="button" class="pw-eye" onclick="togglePw('sm-cur-pass',this)" tabindex="-1">🙈</button></div></div>
+     <div><label>新密碼</label><div class="pw-wrap"><input type="password" id="sm-new-pass"/><button type="button" class="pw-eye" onclick="togglePw('sm-new-pass',this)" tabindex="-1">🙈</button></div></div>
+     <div><label>確認新密碼</label><div class="pw-wrap"><input type="password" id="sm-new-pass2"/><button type="button" class="pw-eye" onclick="togglePw('sm-new-pass2',this)" tabindex="-1">🙈</button></div></div>`,
     `<button class="btn" onclick="closeModal('modal-small')">取消</button>
      <button class="btn btn-primary" onclick="doChangePassword()">儲存</button>`
   );

@@ -179,6 +179,18 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') navigate(1);
 });
 
+function togglePw(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '👁️';
+  } else {
+    input.type = 'password';
+    btn.textContent = '🙈';
+  }
+}
+
 // Override openModal for new-cal to init color picker
 const _origOpenNewCal = window.openModal;
 document.addEventListener('DOMContentLoaded', () => {

@@ -42,7 +42,20 @@ app.get('/api/me', auth, async (req, res) => {
   res.json({ user: rows[0], settings: settings.rows[0] || {} });
 });
 
+// login rate limiting: max 10 attempts per IP per 15 minutes
+const loginAttempts = new Map();
+function checkLoginLimit(ip) {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip) || { count: 0, resetAt: now + 15 * 60 * 1000 };
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + 15 * 60 * 1000; }
+  entry.count++;
+  loginAttempts.set(ip, entry);
+  return entry.count <= 10;
+}
+
 app.post('/api/login', async (req, res) => {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  if (!checkLoginLimit(ip)) return res.status(429).json({ error: '嘗試次數過多，請 15 分鐘後再試' });
   const { username, password } = req.body;
   const { rows } = await pool.query('SELECT * FROM dal_users WHERE username=$1', [username]);
   if (!rows[0]) return res.status(401).json({ error: '帳號或密碼錯誤' });

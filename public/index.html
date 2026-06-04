@@ -25,7 +25,7 @@
     </div>
     <div style="display:flex;flex-direction:column;gap:14px">
       <div><label>帳號</label><input type="text" id="login-user" autocomplete="username"/></div>
-      <div><label>密碼</label><input type="password" id="login-pass" autocomplete="current-password"/></div>
+      <div><label>密碼</label><div class="pw-wrap"><input type="password" id="login-pass" autocomplete="current-password"/><button type="button" class="pw-eye" onclick="togglePw('login-pass',this)" tabindex="-1">🙈</button></div></div>
       <div id="login-err" style="color:#dc2626;font-size:13px;display:none"></div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px" onclick="doLogin()">登入</button>
     </div>
