@@ -38,6 +38,7 @@ function updateSidebar() {
       <span class="cal-name" title="${cal.name}">${cal.name}</span>
       <div class="cal-actions">
         <button class="btn-icon" style="font-size:13px" onclick="openEditCalendar(${cal.id})" title="編輯">✎</button>
+        <button class="btn-icon" style="font-size:13px;color:#ef4444" onclick="deleteCalendar(${cal.id})" title="刪除">✕</button>
       </div>`;
     list.appendChild(div);
   }

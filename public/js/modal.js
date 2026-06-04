@@ -133,6 +133,21 @@ function openModal_newCal() {
   openModal('new-cal');
 }
 
+async function deleteCalendar(calId) {
+  const cal = S.calendars.find(c => c.id === calId);
+  if (!cal) return;
+  if (!confirm(`確定刪除「${cal.name}」行事曆？\n（此行事曆內的所有任務也會一併刪除）`)) return;
+  try {
+    await API.deleteCalendar(calId);
+    S.calendars = S.calendars.filter(c => c.id !== calId);
+    S.visibleCalIds = S.visibleCalIds.filter(id => id !== calId);
+    S.categories = S.categories.filter(c => c.calendar_id !== calId);
+    await reloadData();
+    renderApp();
+    showToast('行事曆已刪除');
+  } catch(err) { showToast('錯誤：' + err.message); }
+}
+
 async function saveCalendar() {
   const name = document.getElementById('cal-name').value.trim();
   if (!name) { showToast('請輸入行事曆名稱'); return; }
