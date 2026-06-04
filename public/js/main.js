@@ -179,6 +179,14 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') navigate(1);
 });
 
+function toggleSection(label) {
+  const content = label.nextElementSibling;
+  const arrow = label.querySelector('.collapse-arrow');
+  const isCollapsed = label.classList.toggle('collapsed');
+  content.style.display = isCollapsed ? 'none' : '';
+  arrow.textContent = isCollapsed ? '▸' : '▾';
+}
+
 function togglePw(inputId, btn) {
   const input = document.getElementById(inputId);
   if (!input) return;

@@ -197,41 +197,61 @@
     <div class="settings-body">
 
       <div class="settings-section">
-        <div class="settings-section-label">主題色</div>
-        <div id="theme-swatches"></div>
-        <input type="hidden" id="theme-accent-hidden"/>
+        <div class="settings-section-label collapsible" onclick="toggleSection(this)">
+          <span>主題色</span><span class="collapse-arrow">▾</span>
+        </div>
+        <div class="section-content">
+          <div id="theme-swatches"></div>
+          <input type="hidden" id="theme-accent-hidden"/>
+        </div>
       </div>
 
       <div class="settings-section">
-        <div class="settings-section-label">分類管理</div>
-        <div>
-          <label style="margin-bottom:6px">行事曆</label>
-          <select id="settings-cat-calendar" onchange="renderSettingsCategories()"></select>
+        <div class="settings-section-label collapsible" onclick="toggleSection(this)">
+          <span>分類管理</span><span class="collapse-arrow">▾</span>
         </div>
-        <div class="cat-list" id="settings-cat-list" style="margin-top:10px"></div>
-        <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="openAddCategory()">+ 新增分類</button>
+        <div class="section-content">
+          <div>
+            <label style="margin-bottom:6px">行事曆</label>
+            <select id="settings-cat-calendar" onchange="renderSettingsCategories()"></select>
+          </div>
+          <div class="cat-list" id="settings-cat-list" style="margin-top:10px"></div>
+          <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="openAddCategory()">+ 新增分類</button>
+        </div>
       </div>
 
       <div class="settings-section">
-        <div class="settings-section-label">行事曆成員</div>
-        <div>
-          <label style="margin-bottom:6px">行事曆</label>
-          <select id="settings-mem-calendar" onchange="renderSettingsMembers()"></select>
+        <div class="settings-section-label collapsible" onclick="toggleSection(this)">
+          <span>行事曆成員</span><span class="collapse-arrow">▾</span>
         </div>
-        <div class="member-list" id="settings-mem-list" style="margin-top:10px"></div>
-        <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="openInviteMember()">+ 邀請成員</button>
+        <div class="section-content">
+          <div>
+            <label style="margin-bottom:6px">行事曆</label>
+            <select id="settings-mem-calendar" onchange="renderSettingsMembers()"></select>
+          </div>
+          <div class="member-list" id="settings-mem-list" style="margin-top:10px"></div>
+          <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="openInviteMember()">+ 邀請成員</button>
+        </div>
       </div>
 
       <div class="settings-section" id="admin-section" style="display:none">
-        <div class="settings-section-label">帳號管理（管理員）</div>
-        <div id="user-list"></div>
-        <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="openAddUser()">+ 新增帳號</button>
+        <div class="settings-section-label collapsible collapsed" onclick="toggleSection(this)">
+          <span>帳號管理（管理員）</span><span class="collapse-arrow">▸</span>
+        </div>
+        <div class="section-content" style="display:none">
+          <div id="user-list"></div>
+          <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="openAddUser()">+ 新增帳號</button>
+        </div>
       </div>
 
       <div class="settings-section">
-        <div class="settings-section-label">帳號</div>
-        <button class="btn btn-sm" style="width:100%" onclick="openChangePassword()">修改密碼</button>
-        <button class="btn btn-sm btn-danger" style="width:100%;margin-top:6px" onclick="doLogout()">登出</button>
+        <div class="settings-section-label collapsible collapsed" onclick="toggleSection(this)">
+          <span>帳號</span><span class="collapse-arrow">▸</span>
+        </div>
+        <div class="section-content" style="display:none">
+          <button class="btn btn-sm" style="width:100%" onclick="openChangePassword()">修改密碼</button>
+          <button class="btn btn-sm btn-danger" style="width:100%;margin-top:6px" onclick="doLogout()">登出</button>
+        </div>
       </div>
     </div>
   </div>
