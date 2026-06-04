@@ -34,7 +34,7 @@ const adminOnly = async (req, res, next) => {
 // ── Auth ──────────────────────────────────────────────────────────────
 app.get('/api/me', auth, async (req, res) => {
   const { rows } = await pool.query(
-    'SELECT id, username, display_name, avatar_color, is_admin FROM dal_users WHERE id=$1',
+    'SELECT id, username, display_name, avatar_color, is_admin, can_invite FROM dal_users WHERE id=$1',
     [req.session.userId]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
@@ -64,7 +64,7 @@ app.post('/api/login', async (req, res) => {
   req.session.userId = rows[0].id;
   const settings = await pool.query('SELECT * FROM dal_user_settings WHERE user_id=$1', [rows[0].id]);
   res.json({
-    user: { id: rows[0].id, username: rows[0].username, display_name: rows[0].display_name, avatar_color: rows[0].avatar_color, is_admin: rows[0].is_admin },
+    user: { id: rows[0].id, username: rows[0].username, display_name: rows[0].display_name, avatar_color: rows[0].avatar_color, is_admin: rows[0].is_admin, can_invite: rows[0].can_invite },
     settings: settings.rows[0] || {}
   });
 });
@@ -99,21 +99,36 @@ app.put('/api/settings', auth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Users (admin) ─────────────────────────────────────────────────────
+// ── Users ─────────────────────────────────────────────────────────────
+const canInviteMiddleware = async (req, res, next) => {
+  const { rows } = await pool.query('SELECT is_admin, can_invite FROM dal_users WHERE id=$1', [req.session.userId]);
+  if (!rows[0] || (!rows[0].is_admin && !rows[0].can_invite)) return res.status(403).json({ error: 'Forbidden' });
+  next();
+};
+
+// admins see all users; can_invite users see only accounts they created
 app.get('/api/users', auth, async (req, res) => {
-  const { rows } = await pool.query('SELECT id, username, display_name, avatar_color, is_admin, created_at FROM dal_users ORDER BY id');
-  res.json(rows);
+  const { rows: me } = await pool.query('SELECT is_admin, can_invite FROM dal_users WHERE id=$1', [req.session.userId]);
+  if (me[0]?.is_admin) {
+    const { rows } = await pool.query('SELECT id, username, display_name, avatar_color, is_admin, can_invite, created_by, created_at FROM dal_users ORDER BY id');
+    return res.json(rows);
+  }
+  if (me[0]?.can_invite) {
+    const { rows } = await pool.query('SELECT id, username, display_name, avatar_color, is_admin, can_invite, created_by, created_at FROM dal_users WHERE created_by=$1 ORDER BY id', [req.session.userId]);
+    return res.json(rows);
+  }
+  res.json([]);
 });
 
-app.post('/api/users', adminOnly, async (req, res) => {
+app.post('/api/users', canInviteMiddleware, async (req, res) => {
+  const { rows: me } = await pool.query('SELECT is_admin FROM dal_users WHERE id=$1', [req.session.userId]);
   const { username, password, display_name, avatar_color, is_admin } = req.body;
   const hash = await bcrypt.hash(password, 10);
   const { rows } = await pool.query(
-    'INSERT INTO dal_users(username,password_hash,display_name,avatar_color,is_admin) VALUES($1,$2,$3,$4,$5) RETURNING id,username,display_name,avatar_color,is_admin',
-    [username, hash, display_name, avatar_color || '#2563eb', !!is_admin]
+    'INSERT INTO dal_users(username,password_hash,display_name,avatar_color,is_admin,created_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,username,display_name,avatar_color,is_admin,can_invite',
+    [username, hash, display_name, avatar_color || '#2563eb', me[0].is_admin ? !!is_admin : false, req.session.userId]
   );
   const newUser = rows[0];
-  // auto-create a default calendar for the new user
   const cal = await pool.query(
     "INSERT INTO dal_calendars(name,color,owner_id) VALUES('我的行事曆',$1,$2) RETURNING id",
     [avatar_color || '#2563eb', newUser.id]
@@ -123,23 +138,36 @@ app.post('/api/users', adminOnly, async (req, res) => {
   res.json(newUser);
 });
 
-app.patch('/api/users/:id', adminOnly, async (req, res) => {
-  const { display_name, avatar_color, is_admin, password } = req.body;
+app.patch('/api/users/:id', auth, async (req, res) => {
   const uid = parseInt(req.params.id);
+  const { rows: me } = await pool.query('SELECT is_admin FROM dal_users WHERE id=$1', [req.session.userId]);
+  const { rows: target } = await pool.query('SELECT created_by FROM dal_users WHERE id=$1', [uid]);
+  if (!target[0]) return res.status(404).json({ error: 'Not found' });
+  // admin can edit anyone; can_invite can only edit their own created users
+  const isAdmin = me[0]?.is_admin;
+  const isOwner = target[0].created_by === req.session.userId;
+  if (!isAdmin && !isOwner) return res.status(403).json({ error: 'Forbidden' });
+
+  const { display_name, avatar_color, is_admin, can_invite, password } = req.body;
   if (display_name !== undefined) await pool.query('UPDATE dal_users SET display_name=$1 WHERE id=$2', [display_name, uid]);
   if (avatar_color !== undefined) await pool.query('UPDATE dal_users SET avatar_color=$1 WHERE id=$2', [avatar_color, uid]);
-  if (is_admin !== undefined) await pool.query('UPDATE dal_users SET is_admin=$1 WHERE id=$2', [!!is_admin, uid]);
+  if (isAdmin && is_admin !== undefined) await pool.query('UPDATE dal_users SET is_admin=$1 WHERE id=$2', [!!is_admin, uid]);
+  if (isAdmin && can_invite !== undefined) await pool.query('UPDATE dal_users SET can_invite=$1 WHERE id=$2', [!!can_invite, uid]);
   if (password) {
     const hash = await bcrypt.hash(password, 10);
     await pool.query('UPDATE dal_users SET password_hash=$1 WHERE id=$2', [hash, uid]);
   }
-  const { rows } = await pool.query('SELECT id,username,display_name,avatar_color,is_admin FROM dal_users WHERE id=$1', [uid]);
+  const { rows } = await pool.query('SELECT id,username,display_name,avatar_color,is_admin,can_invite FROM dal_users WHERE id=$1', [uid]);
   res.json(rows[0]);
 });
 
-app.delete('/api/users/:id', adminOnly, async (req, res) => {
+app.delete('/api/users/:id', auth, async (req, res) => {
   const uid = parseInt(req.params.id);
   if (uid === req.session.userId) return res.status(400).json({ error: '無法刪除自己' });
+  const { rows: me } = await pool.query('SELECT is_admin FROM dal_users WHERE id=$1', [req.session.userId]);
+  const { rows: target } = await pool.query('SELECT created_by FROM dal_users WHERE id=$1', [uid]);
+  if (!target[0]) return res.status(404).json({ error: 'Not found' });
+  if (!me[0]?.is_admin && target[0].created_by !== req.session.userId) return res.status(403).json({ error: 'Forbidden' });
   await pool.query('DELETE FROM dal_users WHERE id=$1', [uid]);
   res.json({ ok: true });
 });
@@ -417,6 +445,8 @@ async function initDb() {
   const fs = require('fs');
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   await pool.query(schema);
+  await pool.query(`ALTER TABLE dal_users ADD COLUMN IF NOT EXISTS can_invite BOOLEAN DEFAULT FALSE`);
+  await pool.query(`ALTER TABLE dal_users ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES dal_users(id) ON DELETE SET NULL`);
   // ensure dal_sessions exists (connect-pg-simple schema)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS dal_sessions (

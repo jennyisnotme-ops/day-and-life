@@ -6,7 +6,7 @@ function openSettings() {
   renderSettingsCalendarSelects();
   renderSettingsCategories();
   renderSettingsMembers();
-  if (S.user?.is_admin) {
+  if (S.user?.is_admin || S.user?.can_invite) {
     document.getElementById('admin-section').style.display = '';
     renderUserList();
   }
@@ -87,16 +87,27 @@ async function doRemoveMember(calId, userId) {
 function renderUserList() {
   const list = document.getElementById('user-list');
   if (!list) return;
+  const isAdmin = S.user?.is_admin;
   list.innerHTML = S.allUsers.map(u => `
-    <div class="member-row">
+    <div class="member-row" style="flex-wrap:wrap;gap:4px">
       <div class="avatar" style="background:${u.avatar_color||'#2563eb'};width:24px;height:24px;font-size:10px">${(u.display_name||u.username)[0]}</div>
-      <div style="flex:1">
+      <div style="flex:1;min-width:80px">
         <div style="font-size:13px;font-weight:500">${escHtml(u.display_name)}</div>
-        <div style="font-size:11px;color:var(--text3)">@${escHtml(u.username)}${u.is_admin?' · 管理員':''}</div>
+        <div style="font-size:11px;color:var(--text3)">@${escHtml(u.username)}${u.is_admin?' · 管理員':''}${u.can_invite?' · 可邀請':''}</div>
       </div>
-      ${u.id !== S.user?.id ? `<button class="btn-icon btn-sm" onclick="openResetUserPassword(${u.id})" title="重設密碼">🔑</button>
-      <button class="btn-icon btn-sm" onclick="doDeleteUser(${u.id})" title="刪除">✕</button>` : ''}
+      ${u.id !== S.user?.id ? `
+        ${isAdmin ? `<button class="btn btn-sm" style="font-size:11px;padding:2px 6px" onclick="toggleCanInvite(${u.id},${!u.can_invite})" title="邀請權限">${u.can_invite?'取消邀請權':'給邀請權'}</button>` : ''}
+        <button class="btn-icon btn-sm" onclick="openResetUserPassword(${u.id})" title="重設密碼">🔑</button>
+        <button class="btn-icon btn-sm" onclick="doDeleteUser(${u.id})" title="刪除">✕</button>` : ''}
     </div>`).join('') || '<div class="empty">尚無用戶</div>';
+}
+
+async function toggleCanInvite(userId, value) {
+  await API.updateUser(userId, { can_invite: value });
+  const u = S.allUsers.find(u => u.id === userId);
+  if (u) u.can_invite = value;
+  renderUserList();
+  showToast(value ? '已開放邀請權限' : '已取消邀請權限');
 }
 
 function openResetUserPassword(userId) {
