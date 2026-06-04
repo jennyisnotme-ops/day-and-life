@@ -179,6 +179,10 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') navigate(1);
 });
 
+function toggleRepeatUntil(val) {
+  document.getElementById('repeat-until-wrap').style.display = val === 'none' ? 'none' : '';
+}
+
 function toggleSection(label) {
   const content = label.nextElementSibling;
   const arrow = label.querySelector('.collapse-arrow');

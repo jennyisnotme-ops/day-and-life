@@ -140,15 +140,21 @@
         <label>時間標記（選填）</label>
         <input type="time" id="task-time"/>
       </div>
-      <div>
-        <label>重複</label>
-        <select id="task-repeat">
-          <option value="none">不重複</option>
-          <option value="daily">每天</option>
-          <option value="weekly">每週</option>
-          <option value="biweekly">雙週</option>
-          <option value="monthly">每月</option>
-        </select>
+      <div class="form-row">
+        <div>
+          <label>重複</label>
+          <select id="task-repeat" onchange="toggleRepeatUntil(this.value)">
+            <option value="none">不重複</option>
+            <option value="daily">每天</option>
+            <option value="weekly">每週</option>
+            <option value="biweekly">雙週</option>
+            <option value="monthly">每月</option>
+          </select>
+        </div>
+        <div id="repeat-until-wrap" style="display:none">
+          <label>重複至</label>
+          <input type="date" id="task-repeat-until"/>
+        </div>
       </div>
       <div>
         <label>備註（選填）</label>

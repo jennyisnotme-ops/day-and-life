@@ -303,17 +303,43 @@ app.get('/api/tasks', auth, async (req, res) => {
   res.json(rows);
 });
 
+function nextRepeatDate(d, repeatType) {
+  const date = new Date(d);
+  if (repeatType === 'daily')    date.setDate(date.getDate() + 1);
+  if (repeatType === 'weekly')   date.setDate(date.getDate() + 7);
+  if (repeatType === 'biweekly') date.setDate(date.getDate() + 14);
+  if (repeatType === 'monthly')  date.setMonth(date.getMonth() + 1);
+  return date;
+}
+
 app.post('/api/tasks', auth, async (req, res) => {
-  const { calendar_id, category_id, title, date, end_date, time_hint, repeat_type, assigned_to, notes } = req.body;
+  const { calendar_id, category_id, title, date, end_date, time_hint, repeat_type, repeat_until, assigned_to, notes } = req.body;
   const { rows: orderRows } = await pool.query(
     'SELECT COALESCE(MAX(sort_order),0)+1 as next FROM dal_tasks WHERE calendar_id=$1 AND date IS NOT DISTINCT FROM $2',
     [calendar_id, date || null]
   );
   const { rows } = await pool.query(`
-    INSERT INTO dal_tasks(calendar_id,created_by,assigned_to,category_id,title,date,end_date,time_hint,sort_order,repeat_type,notes)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
-  `, [calendar_id, req.session.userId, assigned_to || req.session.userId, category_id || null, title, date || null, end_date || null, time_hint || null, orderRows[0].next, repeat_type || 'none', notes || null]);
+    INSERT INTO dal_tasks(calendar_id,created_by,assigned_to,category_id,title,date,end_date,time_hint,sort_order,repeat_type,repeat_until,notes)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *
+  `, [calendar_id, req.session.userId, assigned_to || req.session.userId, category_id || null, title, date || null, end_date || null, time_hint || null, orderRows[0].next, repeat_type || 'none', repeat_until || null, notes || null]);
   const task = rows[0];
+
+  // auto-generate repeat instances
+  if (repeat_type && repeat_type !== 'none' && repeat_until && date) {
+    const groupId = task.id;
+    await pool.query('UPDATE dal_tasks SET repeat_group_id=$1 WHERE id=$1', [groupId]);
+    let cur = nextRepeatDate(date, repeat_type);
+    const until = new Date(repeat_until);
+    while (cur <= until) {
+      const ds = cur.toISOString().slice(0,10);
+      await pool.query(`
+        INSERT INTO dal_tasks(calendar_id,created_by,assigned_to,category_id,title,date,time_hint,sort_order,repeat_type,repeat_until,repeat_group_id,notes)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      `, [calendar_id, req.session.userId, assigned_to || req.session.userId, category_id || null, title, ds, time_hint || null, 0, repeat_type, repeat_until, groupId, notes || null]);
+      cur = nextRepeatDate(cur, repeat_type);
+    }
+  }
+
   if (task.category_id) {
     const cat = await pool.query('SELECT name,color FROM dal_categories WHERE id=$1', [task.category_id]);
     task.category_name = cat.rows[0]?.name;
@@ -445,6 +471,8 @@ async function initDb() {
   const fs = require('fs');
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   await pool.query(schema);
+  await pool.query(`ALTER TABLE dal_tasks ADD COLUMN IF NOT EXISTS repeat_until DATE`);
+  await pool.query(`ALTER TABLE dal_tasks ADD COLUMN IF NOT EXISTS repeat_group_id INTEGER`);
   await pool.query(`ALTER TABLE dal_users ADD COLUMN IF NOT EXISTS can_invite BOOLEAN DEFAULT FALSE`);
   await pool.query(`ALTER TABLE dal_users ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES dal_users(id) ON DELETE SET NULL`);
   // ensure dal_sessions exists (connect-pg-simple schema)

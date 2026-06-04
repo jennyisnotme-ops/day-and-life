@@ -12,6 +12,8 @@ function openAddTaskOnDate(dateStr) {
   document.getElementById('task-notes').value = '';
   document.getElementById('task-time').value = '';
   document.getElementById('task-repeat').value = 'none';
+  document.getElementById('task-repeat-until').value = '';
+  document.getElementById('repeat-until-wrap').style.display = 'none';
   populateTaskCalendarSelect();
   populateTaskCategorySelect();
   openModal('add-task');
@@ -30,6 +32,8 @@ function openEditTask(taskId) {
   document.getElementById('task-notes').value = task.notes || '';
   document.getElementById('task-time').value = task.time_hint || '';
   document.getElementById('task-repeat').value = task.repeat_type || 'none';
+  document.getElementById('task-repeat-until').value = task.repeat_until ? task.repeat_until.slice(0,10) : '';
+  toggleRepeatUntil(task.repeat_type || 'none');
   populateTaskCalendarSelect(task.calendar_id);
   populateTaskCategorySelect(task.calendar_id, task.category_id);
   openModal('add-task');
@@ -62,15 +66,16 @@ async function saveTask() {
   const categoryId = document.getElementById('task-category').value ? parseInt(document.getElementById('task-category').value) : null;
   const timeHint = document.getElementById('task-time').value || null;
   const repeatType = document.getElementById('task-repeat').value;
+  const repeatUntil = repeatType !== 'none' ? (document.getElementById('task-repeat-until').value || null) : null;
   const notes = document.getElementById('task-notes').value.trim() || null;
 
   try {
     if (_editingTaskId) {
-      const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType, notes });
+      const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType, repeat_until: repeatUntil, notes });
       const idx = S.tasks.findIndex(t => t.id === _editingTaskId);
       if (idx >= 0) S.tasks[idx] = { ...S.tasks[idx], ...updated };
     } else {
-      const newTask = await API.createTask({ calendar_id: calendarId, category_id: categoryId, title, date, end_date: endDate, time_hint: timeHint, repeat_type: repeatType, notes });
+      const newTask = await API.createTask({ calendar_id: calendarId, category_id: categoryId, title, date, end_date: endDate, time_hint: timeHint, repeat_type: repeatType, repeat_until: repeatUntil, notes });
       S.tasks.push(newTask);
     }
   } catch (err) {
