@@ -136,6 +136,9 @@
   padding:12px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;
 }
 .header-title{font-size:17px;font-weight:700;flex:1}
+/* 桌面版 header-right 維持單行 */
+.header-right{display:flex;align-items:center;gap:8px}
+.header-right-top{display:contents} /* 桌面版 inner wrapper 完全透明 */
 .view-tabs{display:flex;gap:2px;background:var(--bg2);border-radius:var(--radius);padding:2px}
 .view-tab{
   padding:5px 14px;border-radius:6px;border:none;background:transparent;
@@ -398,11 +401,15 @@
   /* Header: stack title on small screens */
   .main-header{flex-wrap:wrap;gap:6px;padding:8px 10px}
   .header-title{font-size:13px;min-width:0}
-  .header-right{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+  .header-right{display:flex;flex-direction:column;gap:4px;align-items:flex-start;width:100%}
   .header-right-top{display:flex;align-items:center;gap:6px}
-  .view-tabs{overflow-x:auto;width:calc(100vw - 24px);scrollbar-width:none;background:var(--bg2);border-radius:var(--radius);padding:2px}
+  .view-tabs{overflow-x:auto;width:100%;scrollbar-width:none;background:var(--bg2);border-radius:var(--radius);padding:2px}
   .view-tabs::-webkit-scrollbar{display:none}
   .view-tab{font-size:11px;padding:4px 10px;white-space:nowrap}
+  /* 月視圖不超出螢幕 */
+  .month-view{overflow:hidden;width:100%}
+  .week-block{overflow:hidden}
+  .content{overflow-x:hidden}
   /* Inbox: fullscreen overlay on mobile */
   .inbox-panel.open{
     position:fixed;inset:0;width:100%;z-index:90;
