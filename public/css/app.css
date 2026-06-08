@@ -407,9 +407,12 @@
   .view-tabs::-webkit-scrollbar{display:none}
   .view-tab{font-size:11px;padding:4px 10px;white-space:nowrap}
   /* 月視圖不超出螢幕 */
-  .month-view{overflow:hidden;width:100%}
-  .week-block{overflow:hidden}
+  .month-view{width:100%;overflow:hidden}
+  .week-block{overflow:hidden;width:100%}
+  .week-header,.week-body{width:100%;overflow:hidden}
+  .week-header-cell,.day-col{min-width:0;box-sizing:border-box}
   .content{overflow-x:hidden}
+  .content-wrap{overflow-x:hidden}
   /* Inbox: fullscreen overlay on mobile */
   .inbox-panel.open{
     position:fixed;inset:0;width:100%;z-index:90;
