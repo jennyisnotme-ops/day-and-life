@@ -631,6 +631,42 @@ app.delete('/api/medication-logs/manual/:id', auth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// 查詢用藥歷史（給歷史頁面用，含每天吃了沒）
+app.get('/api/medication-logs/history', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: '缺少日期' });
+
+  // 取得該區間內所有 active 處方，以及它們的服藥紀錄
+  const { rows: rxRows } = await pool.query(`
+    SELECT
+      ml.log_date, ml.taken, ml.is_manual,
+      p.drug_name, p.dosage, p.frequency, p.recurrence,
+      p.id as prescription_id
+    FROM dal_prescriptions p
+    CROSS JOIN (
+      SELECT generate_series($2::date, $3::date, '1 day'::interval)::date AS log_date
+    ) dates
+    LEFT JOIN dal_medication_logs ml
+      ON ml.prescription_id = p.id AND ml.log_date = dates.log_date
+      AND ml.user_id = $1 AND ml.is_manual = false
+    WHERE p.user_id = $1 AND p.is_active = true
+    ORDER BY dates.log_date, p.created_at
+  `, [uid, from, to]);
+
+  // 手動紀錄
+  const { rows: manualRows } = await pool.query(`
+    SELECT log_date, true as taken, true as is_manual,
+           manual_drug_name as drug_name, manual_dosage as dosage,
+           manual_note, manual_time, id
+    FROM dal_medication_logs
+    WHERE user_id = $1 AND log_date BETWEEN $2 AND $3 AND is_manual = true
+    ORDER BY log_date, id
+  `, [uid, from, to]);
+
+  res.json({ prescriptions: rxRows, manual: manualRows });
+});
+
 // 查詢某日期區間的服藥紀錄（給行事曆視圖用）
 app.get('/api/medication-logs/range', auth, async (req, res) => {
   const uid = req.session.userId;

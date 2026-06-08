@@ -24,7 +24,9 @@ const HP = {
   pdfTo: '',
   prescriptions: [],
   todayLogs: [],
-  activeTab: 'today', // 'today' | 'rx' | 'bp'
+  activeTab: 'today', // 'today' | 'rx' | 'history' | 'bp'
+  historyFrom: '',
+  historyTo: '',
 };
 
 // ── 初始化 ────────────────────────────────────────────────────────────
@@ -65,9 +67,10 @@ function renderHealthView() {
   const today = new Date().toISOString().slice(0, 10);
 
   const tabs = [
-    { id: 'today', label: '今日服藥' },
-    { id: 'rx',    label: '我的處方箋' },
-    { id: 'bp',    label: '我的血壓' },
+    { id: 'today',   label: '今日服藥' },
+    { id: 'rx',      label: '我的處方箋' },
+    { id: 'history', label: '用藥歷史' },
+    { id: 'bp',      label: '我的血壓' },
   ];
 
   const tabBar = `<div class="health-tabs">
@@ -80,6 +83,8 @@ function renderHealthView() {
     body = renderTodayTab(today);
   } else if (HP.activeTab === 'rx') {
     body = renderRxTab();
+  } else if (HP.activeTab === 'history') {
+    body = renderHistoryTab();
   } else {
     body = renderBpTab();
   }
@@ -145,6 +150,92 @@ function renderBpTab() {
       </div>
       ${renderBpTable()}
     </div>`;
+}
+
+// ── 用藥歷史 tab ──────────────────────────────────────────────────────
+function renderHistoryTab() {
+  const today = new Date().toISOString().slice(0,10);
+  const monthAgo = new Date(); monthAgo.setMonth(monthAgo.getMonth()-1);
+  const defaultFrom = monthAgo.toISOString().slice(0,10);
+  const from = HP.historyFrom || defaultFrom;
+  const to   = HP.historyTo   || today;
+  return `
+    <div class="health-section">
+      <div class="health-section-header">
+        <h3>用藥歷史</h3>
+        <button class="btn btn-sm" onclick="openExportModal()">📄 匯出 PDF</button>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;padding:12px 18px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px">
+          <label>從</label>
+          <input type="date" value="${from}" onchange="HP.historyFrom=this.value" style="font-size:13px"/>
+          <label>到</label>
+          <input type="date" value="${to}" onchange="HP.historyTo=this.value" style="font-size:13px"/>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="loadAndRenderHistory()">查詢</button>
+      </div>
+      <div id="history-body" style="padding:0 18px 16px">
+        <div style="color:var(--text3);font-size:13px">選擇日期後點查詢</div>
+      </div>
+    </div>`;
+}
+
+async function loadAndRenderHistory() {
+  const from = HP.historyFrom || new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  const to   = HP.historyTo   || new Date().toISOString().slice(0,10);
+  const el = document.getElementById('history-body');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--text3);font-size:13px">載入中...</div>';
+  try {
+    const data = await apiFetch(`/api/medication-logs/history?from=${from}&to=${to}`);
+    el.innerHTML = renderHistoryTable(data, from, to);
+  } catch(e) {
+    el.innerHTML = `<div style="color:#ef4444;font-size:13px">載入失敗：${e.message}</div>`;
+  }
+}
+
+function renderHistoryTable(data, from, to) {
+  const { prescriptions, manual } = data;
+  if (!prescriptions.length && !manual.length) return '<div class="health-empty">所選區間無用藥紀錄</div>';
+
+  // 整理日期列表
+  const dates = [];
+  let cur = new Date(from + 'T00:00:00');
+  const end = new Date(to + 'T00:00:00');
+  while (cur <= end) { dates.push(cur.toISOString().slice(0,10)); cur = new Date(cur.getTime()+86400000); }
+
+  // 整理處方籤 lookup
+  const rxNames = [...new Set(prescriptions.map(r => r.drug_name))];
+  const rxMap = {}; // { 'date|drug_name': taken }
+  for (const r of prescriptions) {
+    const key = `${r.log_date?.slice(0,10)}|${r.drug_name}`;
+    rxMap[key] = r.taken;
+  }
+
+  // 手動紀錄 lookup
+  const manualByDate = {};
+  for (const m of manual) {
+    const d = m.log_date.slice(0,10);
+    if (!manualByDate[d]) manualByDate[d] = [];
+    manualByDate[d].push(m);
+  }
+
+  const header = `<tr><th>日期</th>${rxNames.map(n=>`<th>${escHtml(n)}</th>`).join('')}${manual.length?'<th>臨時用藥</th>':''}</tr>`;
+
+  const rows = dates.map(d => {
+    const rxCells = rxNames.map(n => {
+      const key = `${d}|${n}`;
+      const taken = rxMap[key];
+      if (taken === undefined || taken === null) return `<td style="text-align:center;color:var(--text3)">—</td>`;
+      return `<td style="text-align:center">${taken ? '✅' : '❌'}</td>`;
+    }).join('');
+    const manualCell = manual.length ? `<td style="font-size:11px;color:var(--text2)">${
+      (manualByDate[d]||[]).map(m=>`${m.drug_name}${m.dosage?' '+m.dosage:''}`).join('、') || ''
+    }</td>` : '';
+    return `<tr><td style="white-space:nowrap;font-size:12px">${d}</td>${rxCells}${manualCell}</tr>`;
+  }).join('');
+
+  return `<div style="overflow-x:auto"><table class="bp-table"><thead>${header}</thead><tbody>${rows}</tbody></table></div>`;
 }
 
 // ── 今日服藥區塊 ──────────────────────────────────────────────────────
@@ -690,86 +781,150 @@ async function removeBpShare(viewerId) {
   showToast('已移除分享');
 }
 
-// ── PDF 匯出 ──────────────────────────────────────────────────────────
-function openBpExportModal() {
-  const today = new Date();
-  const monthAgo = new Date(today); monthAgo.setMonth(monthAgo.getMonth() - 1);
-  const fmt = d => d.toISOString().slice(0,10);
+// ── PDF 匯出（通用，可從血壓頁或歷史頁呼叫）────────────────────────────
+function openExportModal(defaultFrom, defaultTo) {
+  const today = new Date().toISOString().slice(0,10);
+  const monthAgo = new Date(); monthAgo.setMonth(monthAgo.getMonth()-1);
+  const from = defaultFrom || HP.historyFrom || monthAgo.toISOString().slice(0,10);
+  const to   = defaultTo   || HP.historyTo   || today;
 
-  showSmallModal('匯出血壓記錄 PDF', `
-  <div style="display:flex;flex-direction:column;gap:12px">
+  showSmallModal('匯出健康紀錄 PDF', `
+  <div style="display:flex;flex-direction:column;gap:14px">
     <div class="form-row">
-      <div><label>起始日期</label><input type="date" id="pdf-from" value="${fmt(monthAgo)}"/></div>
-      <div><label>結束日期</label><input type="date" id="pdf-to" value="${fmt(today)}"/></div>
+      <div><label>起始日期</label><input type="date" id="pdf-from" value="${from}"/></div>
+      <div><label>結束日期</label><input type="date" id="pdf-to" value="${to}"/></div>
     </div>
-    <p style="font-size:12px;color:var(--text3)">將匯出所選區間內的所有血壓記錄。</p>
+    <div>
+      <label style="margin-bottom:8px;display:block">選擇要匯出的內容（可多選）</label>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="pdf-include-bp" checked style="width:16px;height:16px;accent-color:var(--accent)"/>
+          <span>血壓紀錄</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="pdf-include-bp-note" style="width:16px;height:16px;accent-color:var(--accent)"/>
+          <span>血壓紀錄備註</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="pdf-include-med" checked style="width:16px;height:16px;accent-color:var(--accent)"/>
+          <span>用藥紀錄</span>
+        </label>
+      </div>
+    </div>
   </div>`, `
     <button class="btn" onclick="closeModal('modal-small')">取消</button>
-    <button class="btn btn-primary" onclick="exportBpPdf()">下載 PDF</button>
+    <button class="btn btn-primary" onclick="exportHealthPdf()">下載 PDF</button>
   `);
 }
 
-async function exportBpPdf() {
+// 相容舊的呼叫方式
+function openBpExportModal() { openExportModal(); }
+
+async function exportHealthPdf() {
   const from = document.getElementById('pdf-from')?.value;
   const to   = document.getElementById('pdf-to')?.value;
+  const includeBp     = document.getElementById('pdf-include-bp')?.checked;
+  const includeBpNote = document.getElementById('pdf-include-bp-note')?.checked;
+  const includeMed    = document.getElementById('pdf-include-med')?.checked;
+
   if (!from || !to) { showToast('請選擇日期區間'); return; }
+  if (!includeBp && !includeMed) { showToast('請至少勾選一項'); return; }
 
-  const ownerId = HP.viewingOwner ? HP.viewingOwner.id : null;
-  const params = new URLSearchParams({ from, to });
-  if (ownerId) params.set('owner_id', ownerId);
-  const records = await apiFetch(`/api/bp?${params}`);
+  let bpRecords = [], medData = null;
 
-  if (!records.length) { showToast('所選區間無資料'); return; }
+  if (includeBp) {
+    const ownerId = HP.viewingOwner ? HP.viewingOwner.id : null;
+    const params = new URLSearchParams({ from, to });
+    if (ownerId) params.set('owner_id', ownerId);
+    bpRecords = await apiFetch(`/api/bp?${params}`).catch(() => []);
+  }
+  if (includeMed) {
+    medData = await apiFetch(`/api/medication-logs/history?from=${from}&to=${to}`).catch(() => null);
+  }
+
+  if (!bpRecords.length && !medData?.prescriptions?.length && !medData?.manual?.length) {
+    showToast('所選區間無資料'); return;
+  }
 
   closeModal('modal-small');
-  generateBpPdf(records, from, to);
+  generateHealthPdf({ bpRecords, medData, from, to, includeBpNote });
 }
 
+async function exportBpPdf() { openExportModal(); }
+
 function generateBpPdf(records, from, to) {
-  // 建立隱藏的列印區塊
+  generateHealthPdf({ bpRecords: records, medData: null, from, to, includeBpNote: true });
+}
+
+function generateHealthPdf({ bpRecords, medData, from, to, includeBpNote }) {
   const existing = document.getElementById('bp-print-area');
   if (existing) existing.remove();
 
   const ownerName = HP.viewingOwner ? HP.viewingOwner.display_name : (S.user?.display_name || '');
-  const rows = records.map(r => {
-    const dt = new Date(r.measured_at);
-    const dateStr = `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
-    const timeStr = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
-    const level = bpLevel(r.systolic, r.diastolic);
-    return `<tr>
-      <td>${dateStr} ${timeStr}</td>
-      <td>${r.systolic}</td>
-      <td>${r.diastolic}</td>
-      <td>${r.pulse ?? ''}</td>
-      <td>${level.label}</td>
-      <td>${escHtml(r.note || '')}</td>
-    </tr>`;
-  }).join('');
+  const th = (t, center) => `<th style="text-align:${center?'center':'left'};padding:8px;border:1px solid #e5e7eb;background:#f3f4f6">${t}</th>`;
+  const td = (t, center) => `<td style="text-align:${center?'center':'left'};padding:7px 8px;border:1px solid #e5e7eb">${t}</td>`;
+
+  let html = `<div style="font-family:sans-serif;padding:24px;font-size:13px;color:#111">
+    <h2 style="margin:0 0 2px">${escHtml(ownerName)} 健康紀錄</h2>
+    <p style="color:#666;margin:0 0 20px;font-size:12px">${from} 至 ${to}</p>`;
+
+  // 血壓
+  if (bpRecords && bpRecords.length) {
+    const rows = bpRecords.map(r => {
+      const dt = new Date(r.measured_at);
+      const dtStr = `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+      const level = bpLevel(r.systolic, r.diastolic);
+      return `<tr>
+        ${td(dtStr)} ${td(r.systolic,true)} ${td(r.diastolic,true)} ${td(r.pulse??'',true)} ${td(level.label,true)}
+        ${includeBpNote ? td(escHtml(r.note||'')) : ''}
+      </tr>`;
+    }).join('');
+    html += `<h3 style="margin:0 0 8px;font-size:14px">血壓記錄（${bpRecords.length} 筆）</h3>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+      <thead><tr>${th('時間')}${th('收縮壓',true)}${th('舒張壓',true)}${th('脈搏',true)}${th('狀態',true)}${includeBpNote?th('備註'):''}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  // 用藥紀錄
+  if (medData) {
+    const { prescriptions, manual } = medData;
+    const rxNames = [...new Set(prescriptions.map(r => r.drug_name))];
+    if (rxNames.length || manual.length) {
+      // 整理日期
+      const dates = [];
+      let cur = new Date(from+'T00:00:00'), endD = new Date(to+'T00:00:00');
+      while (cur <= endD) { dates.push(cur.toISOString().slice(0,10)); cur = new Date(cur.getTime()+86400000); }
+
+      const rxMap = {};
+      for (const r of prescriptions) rxMap[`${r.log_date?.slice(0,10)}|${r.drug_name}`] = r.taken;
+      const manualByDate = {};
+      for (const m of manual) { const d=m.log_date.slice(0,10); if(!manualByDate[d]) manualByDate[d]=[]; manualByDate[d].push(m); }
+
+      const rows = dates.map(d => {
+        const rxCells = rxNames.map(n => {
+          const taken = rxMap[`${d}|${n}`];
+          return td(taken===undefined||taken===null ? '-' : taken ? 'O' : 'X', true);
+        }).join('');
+        const manCell = manual.length ? td((manualByDate[d]||[]).map(m=>m.drug_name+(m.dosage?' '+m.dosage:'')).join(', ')) : '';
+        return `<tr>${td(d)}${rxCells}${manCell}</tr>`;
+      }).join('');
+
+      html += `<h3 style="margin:0 0 8px;font-size:14px">用藥紀錄</h3>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+        <thead><tr>${th('日期')}${rxNames.map(n=>th(escHtml(n),true)).join('')}${manual.length?th('臨時用藥'):''}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+  }
+
+  html += '</div>';
 
   const div = document.createElement('div');
   div.id = 'bp-print-area';
-  div.innerHTML = `
-    <div style="font-family:sans-serif;padding:24px;font-size:13px">
-      <h2 style="margin:0 0 4px">${escHtml(ownerName)} 血壓記錄</h2>
-      <p style="color:#666;margin:0 0 16px">${from} 至 ${to}（共 ${records.length} 筆）</p>
-      <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="background:#f3f4f6">
-            <th style="text-align:left;padding:8px;border:1px solid #e5e7eb">時間</th>
-            <th style="text-align:center;padding:8px;border:1px solid #e5e7eb">收縮壓</th>
-            <th style="text-align:center;padding:8px;border:1px solid #e5e7eb">舒張壓</th>
-            <th style="text-align:center;padding:8px;border:1px solid #e5e7eb">脈搏</th>
-            <th style="text-align:center;padding:8px;border:1px solid #e5e7eb">狀態</th>
-            <th style="text-align:left;padding:8px;border:1px solid #e5e7eb">備註</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+  div.innerHTML = html;
   document.body.appendChild(div);
-
   window.print();
-
   setTimeout(() => div.remove(), 1000);
 }
 
