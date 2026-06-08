@@ -607,7 +607,7 @@ app.get('/api/medication-logs', auth, async (req, res) => {
            manual_note, manual_time, log_date, true as taken, true as is_manual
     FROM dal_medication_logs
     WHERE user_id=$1 AND log_date=$2 AND is_manual=true
-    ORDER BY created_at
+    ORDER BY id
   `, [uid, date]);
   res.json([...rxRows, ...manualRows]);
 });
