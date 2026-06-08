@@ -360,7 +360,7 @@ app.patch('/api/tasks/:id', auth, async (req, res) => {
   await pool.query(`UPDATE dal_tasks SET
     title=COALESCE($1,title),
     category_id=CASE WHEN $2::int IS NULL AND $3 THEN NULL ELSE COALESCE($2::int,category_id) END,
-    date=CASE WHEN $14=true THEN NULL ELSE COALESCE($4,date) END,
+    date=CASE WHEN $14=true THEN NULL ELSE COALESCE($4,"date") END,
     end_date=CASE WHEN $6 THEN NULL ELSE COALESCE($5::date,end_date) END,
     time_hint=COALESCE($7,time_hint),
     completed=COALESCE($8,completed),
@@ -510,6 +510,263 @@ app.get('/api/stats', auth, async (req, res) => {
   res.json(rows);
 });
 
+// ── Drug Master ───────────────────────────────────────────────────────
+
+app.get('/api/drugs', auth, async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 1) return res.json([]);
+  const { rows } = await pool.query(
+    `SELECT id, name, dosage, unit FROM dal_drug_master
+     WHERE name ILIKE $1 ORDER BY name LIMIT 20`,
+    [`%${q.trim()}%`]
+  );
+  res.json(rows);
+});
+
+app.post('/api/drugs', auth, async (req, res) => {
+  const { name, dosage, unit } = req.body;
+  if (!name) return res.status(400).json({ error: '缺少藥名' });
+  const existing = await pool.query('SELECT id FROM dal_drug_master WHERE name=$1 AND dosage=$2', [name, dosage || null]);
+  if (existing.rows.length) return res.json(existing.rows[0]);
+  const { rows } = await pool.query(
+    'INSERT INTO dal_drug_master(name,dosage,unit) VALUES($1,$2,$3) RETURNING *',
+    [name, dosage || null, unit || null]
+  );
+  res.json(rows[0]);
+});
+
+// ── Prescriptions ─────────────────────────────────────────────────────
+
+app.get('/api/prescriptions', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { active } = req.query;
+  let q = 'SELECT * FROM dal_prescriptions WHERE user_id=$1';
+  if (active === '1') q += ' AND is_active=true';
+  q += ' ORDER BY is_active DESC, refill_date ASC NULLS LAST, created_at DESC';
+  const { rows } = await pool.query(q, [uid]);
+  res.json(rows);
+});
+
+app.post('/api/prescriptions', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { drug_name, dosage, category_code, category_detail, frequency, recurrence, refill_date, start_date, notes } = req.body;
+  if (!drug_name || !category_code) return res.status(400).json({ error: '缺少必填欄位' });
+  await pool.query(
+    'INSERT INTO dal_drug_master(name,dosage) VALUES($1,$2) ON CONFLICT DO NOTHING',
+    [drug_name, dosage || null]
+  );
+  const { rows } = await pool.query(
+    `INSERT INTO dal_prescriptions(user_id,drug_name,dosage,category_code,category_detail,frequency,recurrence,refill_date,start_date,notes)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [uid, drug_name, dosage || null, category_code, category_detail || null,
+     frequency || [], recurrence || 'daily', refill_date || null, start_date || null, notes || null]
+  );
+  res.json(rows[0]);
+});
+
+app.put('/api/prescriptions/:id', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { drug_name, dosage, category_code, category_detail, frequency, recurrence, refill_date, start_date, notes, is_active } = req.body;
+  const { rows } = await pool.query(
+    `UPDATE dal_prescriptions SET drug_name=$1,dosage=$2,category_code=$3,category_detail=$4,
+     frequency=$5,recurrence=$6,refill_date=$7,start_date=$8,notes=$9,is_active=$10
+     WHERE id=$11 AND user_id=$12 RETURNING *`,
+    [drug_name, dosage || null, category_code, category_detail || null,
+     frequency || [], recurrence || 'daily', refill_date || null, start_date || null, notes || null,
+     is_active ?? true, req.params.id, uid]
+  );
+  if (!rows.length) return res.status(404).json({ error: '找不到' });
+  res.json(rows[0]);
+});
+
+app.delete('/api/prescriptions/:id', auth, async (req, res) => {
+  const uid = req.session.userId;
+  await pool.query('DELETE FROM dal_prescriptions WHERE id=$1 AND user_id=$2', [req.params.id, uid]);
+  res.json({ ok: true });
+});
+
+// ── Medication Logs ───────────────────────────────────────────────────
+
+app.get('/api/medication-logs', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: '缺少日期' });
+  // 處方籤紀錄
+  const { rows: rxRows } = await pool.query(`
+    SELECT p.id as prescription_id, p.drug_name, p.dosage, p.frequency, p.recurrence,
+           p.category_code, p.category_detail,
+           ml.taken, ml.id as log_id, false as is_manual
+    FROM dal_prescriptions p
+    LEFT JOIN dal_medication_logs ml ON ml.prescription_id=p.id AND ml.log_date=$2 AND ml.user_id=$1 AND ml.is_manual=false
+    WHERE p.user_id=$1 AND p.is_active=true
+    ORDER BY p.created_at
+  `, [uid, date]);
+  // 手動紀錄
+  const { rows: manualRows } = await pool.query(`
+    SELECT id, null as prescription_id, manual_drug_name as drug_name, manual_dosage as dosage,
+           manual_note, manual_time, log_date, true as taken, true as is_manual
+    FROM dal_medication_logs
+    WHERE user_id=$1 AND log_date=$2 AND is_manual=true
+    ORDER BY created_at
+  `, [uid, date]);
+  res.json([...rxRows, ...manualRows]);
+});
+
+// 手動紀錄臨時用藥
+app.post('/api/medication-logs/manual', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { log_date, manual_drug_name, manual_dosage, manual_note, manual_time } = req.body;
+  if (!log_date || !manual_drug_name) return res.status(400).json({ error: '缺少必填欄位' });
+  const { rows } = await pool.query(
+    `INSERT INTO dal_medication_logs(user_id, log_date, taken, is_manual, manual_drug_name, manual_dosage, manual_note, manual_time)
+     VALUES($1,$2,true,true,$3,$4,$5,$6) RETURNING *`,
+    [uid, log_date, manual_drug_name, manual_dosage || null, manual_note || null, manual_time || null]
+  );
+  res.json(rows[0]);
+});
+
+app.delete('/api/medication-logs/manual/:id', auth, async (req, res) => {
+  const uid = req.session.userId;
+  await pool.query('DELETE FROM dal_medication_logs WHERE id=$1 AND user_id=$2 AND is_manual=true', [req.params.id, uid]);
+  res.json({ ok: true });
+});
+
+// 查詢某日期區間的服藥紀錄（給行事曆視圖用）
+app.get('/api/medication-logs/range', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: '缺少日期' });
+  const { rows } = await pool.query(`
+    SELECT p.id as prescription_id, p.drug_name, p.dosage, p.frequency,
+           ml.log_date, ml.taken
+    FROM dal_prescriptions p
+    LEFT JOIN dal_medication_logs ml
+      ON ml.prescription_id=p.id AND ml.user_id=$1 AND ml.log_date BETWEEN $2 AND $3
+    WHERE p.user_id=$1 AND p.is_active=true
+    ORDER BY p.created_at, ml.log_date
+  `, [uid, from, to]);
+  res.json(rows);
+});
+
+app.post('/api/medication-logs', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { prescription_id, log_date, taken } = req.body;
+  const { rows } = await pool.query(
+    `INSERT INTO dal_medication_logs(user_id,prescription_id,log_date,taken)
+     VALUES($1,$2,$3,$4)
+     ON CONFLICT(user_id,prescription_id,log_date) DO UPDATE SET taken=$4
+     RETURNING *`,
+    [uid, prescription_id, log_date, taken]
+  );
+  res.json(rows[0]);
+});
+
+// ── Blood Pressure ────────────────────────────────────────────────────
+
+// 取得自己（或被分享給自己的人）的血壓記錄
+app.get('/api/bp', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { from, to, owner_id } = req.query;
+  // 如果指定 owner_id，先確認有分享權限
+  let targetId = uid;
+  if (owner_id && Number(owner_id) !== uid) {
+    const { rows } = await pool.query(
+      'SELECT 1 FROM dal_bp_shares WHERE owner_id=$1 AND viewer_id=$2',
+      [Number(owner_id), uid]
+    );
+    if (!rows.length) return res.status(403).json({ error: '無存取權限' });
+    targetId = Number(owner_id);
+  }
+  const conditions = ['user_id=$1'];
+  const params = [targetId];
+  if (from) { params.push(from); conditions.push(`measured_at >= $${params.length}`); }
+  if (to)   { params.push(to);   conditions.push(`measured_at <= $${params.length}::date + interval '1 day'`); }
+  const { rows } = await pool.query(
+    `SELECT * FROM dal_bp_records WHERE ${conditions.join(' AND ')} ORDER BY measured_at DESC`,
+    params
+  );
+  res.json(rows);
+});
+
+// 新增血壓記錄
+app.post('/api/bp', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { measured_at, systolic, diastolic, pulse, note } = req.body;
+  if (!measured_at || !systolic || !diastolic) return res.status(400).json({ error: '缺少必填欄位' });
+  const { rows } = await pool.query(
+    `INSERT INTO dal_bp_records(user_id,measured_at,systolic,diastolic,pulse,note)
+     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [uid, measured_at, systolic, diastolic, pulse || null, note || null]
+  );
+  res.json(rows[0]);
+});
+
+// 更新血壓記錄
+app.put('/api/bp/:id', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { measured_at, systolic, diastolic, pulse, note } = req.body;
+  const { rows } = await pool.query(
+    `UPDATE dal_bp_records SET measured_at=$1,systolic=$2,diastolic=$3,pulse=$4,note=$5
+     WHERE id=$6 AND user_id=$7 RETURNING *`,
+    [measured_at, systolic, diastolic, pulse || null, note || null, req.params.id, uid]
+  );
+  if (!rows.length) return res.status(404).json({ error: '找不到記錄' });
+  res.json(rows[0]);
+});
+
+// 刪除血壓記錄
+app.delete('/api/bp/:id', auth, async (req, res) => {
+  const uid = req.session.userId;
+  await pool.query('DELETE FROM dal_bp_records WHERE id=$1 AND user_id=$2', [req.params.id, uid]);
+  res.json({ ok: true });
+});
+
+// 取得分享清單
+app.get('/api/bp/shares', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { rows } = await pool.query(
+    `SELECT u.id, u.username, u.display_name, u.avatar_color
+     FROM dal_bp_shares s JOIN dal_users u ON u.id=s.viewer_id
+     WHERE s.owner_id=$1`,
+    [uid]
+  );
+  res.json(rows);
+});
+
+// 新增分享
+app.post('/api/bp/shares', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { username } = req.body;
+  const { rows: found } = await pool.query('SELECT id FROM dal_users WHERE username=$1', [username]);
+  if (!found.length) return res.status(404).json({ error: '找不到該帳號' });
+  const viewerId = found[0].id;
+  if (viewerId === uid) return res.status(400).json({ error: '不能分享給自己' });
+  await pool.query(
+    'INSERT INTO dal_bp_shares(owner_id,viewer_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
+    [uid, viewerId]
+  );
+  res.json({ ok: true });
+});
+
+// 移除分享
+app.delete('/api/bp/shares/:viewer_id', auth, async (req, res) => {
+  const uid = req.session.userId;
+  await pool.query('DELETE FROM dal_bp_shares WHERE owner_id=$1 AND viewer_id=$2', [uid, req.params.viewer_id]);
+  res.json({ ok: true });
+});
+
+// 查詢有哪些人把血壓分享給自己
+app.get('/api/bp/shared-with-me', auth, async (req, res) => {
+  const uid = req.session.userId;
+  const { rows } = await pool.query(
+    `SELECT u.id, u.username, u.display_name, u.avatar_color
+     FROM dal_bp_shares s JOIN dal_users u ON u.id=s.owner_id
+     WHERE s.viewer_id=$1`,
+    [uid]
+  );
+  res.json(rows);
+});
+
 // ── Init DB & Start ───────────────────────────────────────────────────
 async function initDb() {
   const fs = require('fs');
@@ -532,6 +789,13 @@ async function initDb() {
   await pool.query(`ALTER TABLE dal_tasks ADD COLUMN IF NOT EXISTS end_date DATE`);
   await pool.query(`ALTER TABLE dal_tasks ADD COLUMN IF NOT EXISTS notes TEXT`);
   await pool.query(`ALTER TABLE dal_tasks ALTER COLUMN date DROP NOT NULL`);
+  await pool.query(`ALTER TABLE dal_prescriptions ADD COLUMN IF NOT EXISTS recurrence VARCHAR(20) DEFAULT 'daily'`);
+  await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS is_manual BOOLEAN DEFAULT FALSE`);
+  await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_drug_name VARCHAR(200)`);
+  await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_dosage VARCHAR(100)`);
+  await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_note TEXT`);
+  await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_time TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE dal_medication_logs ALTER COLUMN prescription_id DROP NOT NULL`);
 
   const { rows } = await pool.query('SELECT COUNT(*) FROM dal_users');
   if (rows[0].count === '0') {
@@ -548,6 +812,81 @@ async function initDb() {
     await pool.query('INSERT INTO dal_categories(calendar_id,name,color) VALUES($1,$2,$3),($1,$4,$5),($1,$6,$7)',
       [cal.rows[0].id, '會議', '#7c3aed', '內容製作', '#16a34a', '行政事務', '#ea580c']);
     console.log('✅ 初始帳號 admin / admin1234 已建立');
+  }
+
+  // 預載常見慢性病用藥（只在資料表空白時執行）
+  const { rows: drugCount } = await pool.query('SELECT COUNT(*) FROM dal_drug_master');
+  if (drugCount[0].count === '0') {
+    await pool.query(`
+      INSERT INTO dal_drug_master(name, dosage, unit) VALUES
+      -- 高血壓
+      ('脈優錠', '5mg', '顆'),('脈優錠', '10mg', '顆'),
+      ('洛活喜', '5mg', '顆'),('洛活喜', '10mg', '顆'),
+      ('舒壓寧', '5mg', '顆'),('舒壓寧', '10mg', '顆'),
+      ('可悅您', '4mg', '顆'),('可悅您', '8mg', '顆'),
+      ('博脈舒', '2.5mg', '顆'),('博脈舒', '5mg', '顆'),
+      ('合必爽', '160mg', '顆'),('合必爽', '80mg', '顆'),
+      ('亞速止寧', '25mg', '顆'),('亞速止寧', '50mg', '顆'),
+      ('倍他心', '5mg', '顆'),('倍他心', '10mg', '顆'),
+      ('歐得利', '5mg', '顆'),('歐得利', '10mg', '顆'),
+      -- 糖尿病
+      ('庫魯化', '500mg', '顆'),('庫魯化', '850mg', '顆'),
+      ('二甲雙胍', '500mg', '顆'),('二甲雙胍', '850mg', '顆'),
+      ('亞瑪利', '1mg', '顆'),('亞瑪利', '2mg', '顆'),('亞瑪利', '4mg', '顆'),
+      ('糖祿', '30mg', '顆'),('糖祿', '60mg', '顆'),
+      ('必糖復', '5mg', '顆'),('必糖復', '10mg', '顆'),
+      ('捷諾維', '50mg', '顆'),('捷諾維', '100mg', '顆'),
+      ('佳糖維', '5mg', '顆'),('佳糖維', '10mg', '顆'),
+      -- 高血脂
+      ('冠脂妥', '10mg', '顆'),('冠脂妥', '20mg', '顆'),('冠脂妥', '40mg', '顆'),
+      ('立普妥', '10mg', '顆'),('立普妥', '20mg', '顆'),('立普妥', '40mg', '顆'),
+      ('素果', '10mg', '顆'),('素果', '20mg', '顆'),
+      ('美百樂鎮', '10mg', '顆'),('美百樂鎮', '20mg', '顆'),
+      ('益脂可', '10mg', '顆'),('益脂可', '145mg', '顆'),
+      -- 心臟
+      ('脈泰', '10mg', '顆'),('脈泰', '40mg', '顆'),
+      ('耐絞寧貼片', '5mg', '貼'),('耐絞寧貼片', '10mg', '貼'),
+      ('保心安', '100mg', '顆'),
+      ('毛地黃', '0.25mg', '顆'),
+      ('可滅嗽', '25mg', '顆'),('可滅嗽', '50mg', '顆'),
+      -- 腦血管 / 抗凝血
+      ('保栓通', '75mg', '顆'),
+      ('阿斯匹靈', '100mg', '顆'),('阿斯匹靈', '325mg', '顆'),
+      ('普栓達', '110mg', '顆'),('普栓達', '150mg', '顆'),
+      ('拜瑞妥', '10mg', '顆'),('拜瑞妥', '20mg', '顆'),
+      -- 腎臟
+      ('碳酸鈣', '500mg', '顆'),
+      ('愛司特', '25mg', '顆'),('愛司特', '50mg', '顆'),
+      ('腎補鈣', '500mg', '顆'),
+      -- 肝病
+      ('保肝錠', '70mg', '顆'),
+      ('肝得健', '', '顆'),
+      ('干安能', '100mg', '顆'),
+      ('貝樂克', '0.5mg', '顆'),('貝樂克', '1mg', '顆'),
+      ('干擾素注射', '3MIU', '支'),
+      -- 氣喘／COPD
+      ('輔舒酮', '250mcg', '吸'),
+      ('氣全寧', '', '吸'),
+      ('舒肺樂', '18mcg', '吸'),
+      ('思力華', '18mcg', '吸'),
+      ('欣流', '5mg', '顆'),('欣流', '10mg', '顆'),
+      -- 甲狀腺
+      ('甲狀腺素', '50mcg', '顆'),('甲狀腺素', '100mcg', '顆'),
+      ('昂特欣', '5mg', '顆'),('昂特欣', '10mg', '顆'),
+      -- 痛風
+      ('普利樂', '100mg', '顆'),('普利樂', '300mg', '顆'),
+      ('福避痛', '40mg', '顆'),('福避痛', '80mg', '顆'),
+      ('秋水仙素', '0.5mg', '顆'),
+      -- 骨質疏鬆
+      ('福善美', '70mg', '顆'),
+      ('鈣片', '500mg', '顆'),
+      ('維他命D3', '800IU', '顆'),('維他命D3', '1000IU', '顆'),
+      -- 安眠 / 焦慮
+      ('史帝諾斯', '10mg', '顆'),
+      ('樂平片', '5mg', '顆'),('樂平片', '10mg', '顆'),
+      ('悠然', '0.5mg', '顆'),('悠然', '1mg', '顆')
+    `);
+    console.log('✅ 常見慢性病用藥資料已載入');
   }
 }
 

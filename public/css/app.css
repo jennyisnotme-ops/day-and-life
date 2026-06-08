@@ -1,3 +1,90 @@
+/* ── Health View ───────────────────────────────────────────────────── */
+.health-wrap{padding:20px;max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.health-topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.health-person-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.person-tab{padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:var(--bg2);font-size:13px;cursor:pointer;transition:all .15s}
+.person-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.health-section{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xl);overflow:hidden}
+.health-section-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.health-section-header h3{font-size:15px;font-weight:600;margin:0}
+.health-empty{padding:32px;text-align:center;color:var(--text3);font-size:14px}
+.bp-table-wrap{overflow-x:auto}
+.bp-table{width:100%;border-collapse:collapse;font-size:13px}
+.bp-table th{text-align:left;padding:10px 14px;background:var(--bg2);color:var(--text2);font-weight:600;font-size:12px;white-space:nowrap;border-bottom:1px solid var(--border)}
+.bp-table td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+.bp-table tr:last-child td{border-bottom:none}
+.bp-table tr:hover td{background:var(--bg2)}
+.bp-value{font-weight:600;font-size:15px}
+.bp-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.bp-normal{background:#dcfce7;color:#15803d}
+.bp-elevated{background:#fef9c3;color:#a16207}
+.bp-high1{background:#ffedd5;color:#c2410c}
+.bp-high2{background:#fee2e2;color:#b91c1c}
+
+/* 健康頁子頁籤 */
+.health-tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px}
+.health-tab{padding:10px 20px;font-size:14px;font-weight:500;color:var(--text2);background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.health-tab:hover{color:var(--text)}
+.health-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+
+/* 處方籤 */
+.rx-list{display:flex;flex-direction:column;gap:0}
+.rx-card{padding:14px 18px;border-bottom:1px solid var(--border);transition:background .15s}
+.rx-card:last-child{border-bottom:none}
+.rx-card:hover{background:var(--bg2)}
+.rx-card-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rx-name{font-size:14px;font-weight:600}
+.rx-dosage{font-size:12px;font-weight:400;color:var(--text2);margin-left:4px}
+.rx-meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;font-size:12px;color:var(--text2)}
+.rx-tag{background:var(--bg3);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:600;color:var(--text)}
+.rx-notes{font-size:12px;color:var(--text3);margin-top:4px}
+.rx-inactive{opacity:.5}
+.rx-inactive-label{padding:8px 18px;font-size:11px;font-weight:600;color:var(--text3);background:var(--bg2);text-transform:uppercase;letter-spacing:.05em}
+
+/* 服藥頻率 */
+.freq-group{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+.freq-check{display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;padding:4px 10px;border:1px solid var(--border);border-radius:6px;user-select:none}
+.freq-check input{accent-color:var(--accent)}
+
+/* 今日服藥 */
+.med-log-list{padding:12px 18px;display:flex;flex-direction:column;gap:8px}
+.med-log-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--bg2);transition:opacity .2s}
+.med-log-item.taken{opacity:.55}
+.med-log-item input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);flex-shrink:0;cursor:pointer}
+.med-log-info{display:flex;flex-direction:column;gap:1px}
+.med-name{font-size:13px;font-weight:600}
+.med-freq{font-size:11px;color:var(--text3)}
+
+/* 領藥提醒 */
+.refill-alert{padding:10px 16px;border-radius:8px;font-size:13px}
+.alert-warn{background:#fef9c3;color:#a16207;border:1px solid #fde68a}
+.alert-danger{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+
+/* 藥品搜尋下拉 */
+.drug-suggestions{position:absolute;z-index:100;left:0;right:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-lg);max-height:200px;overflow-y:auto;margin-top:2px}
+.drug-option{padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.drug-option:hover{background:var(--bg2)}
+.drug-dosage{font-size:11px;color:var(--text3)}
+
+/* 日視圖服藥區塊 */
+.day-med-section{margin:8px 0;padding:10px 14px;background:var(--bg2);border-radius:8px;display:flex;flex-direction:column;gap:4px}
+.day-med-label{font-size:11px;font-weight:600;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+.day-med-section .med-chip{font-size:12px;padding:4px 10px}
+
+/* 行事曆服藥 chip */
+.med-chip{display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:4px;font-size:10px;cursor:pointer;margin-bottom:1px;transition:opacity .15s;user-select:none}
+.med-chip:hover{opacity:.75}
+.med-pending{background:#fef9c3;color:#92400e}
+.med-taken{background:#dcfce7;color:#166534;text-decoration:line-through;opacity:.7}
+.med-chip-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.med-chip-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px}
+
+/* 列印樣式 */
+@media print{
+  body > *:not(#bp-print-area){display:none!important}
+  #bp-print-area{display:block!important}
+}
+
 /* ── Password toggle ───────────────────────────────────────────────── */
 .pw-wrap{position:relative;display:flex;align-items:center}
 .pw-wrap input{flex:1;padding-right:36px}
@@ -311,6 +398,9 @@
   /* Header: stack title on small screens */
   .main-header{flex-wrap:wrap;gap:8px;padding:10px 12px}
   .header-title{font-size:14px;min-width:0;word-break:break-all}
+  .view-tabs{overflow-x:auto;max-width:calc(100vw - 120px);scrollbar-width:none}
+  .view-tabs::-webkit-scrollbar{display:none}
+  .view-tab{font-size:11px;padding:4px 8px;white-space:nowrap}
   /* Inbox: fullscreen overlay on mobile */
   .inbox-panel.open{
     position:fixed;inset:0;width:100%;z-index:90;
@@ -342,3 +432,4 @@
   display:inline-flex;align-items:center;gap:4px;
   padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;
 }
+

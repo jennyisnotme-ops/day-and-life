@@ -7,6 +7,7 @@ function renderApp() {
   else if (S.view === 'week') renderWeekView(content);
   else if (S.view === 'day') renderDayView(content);
   else if (S.view === 'stats') renderStatsView(content);
+  else if (S.view === 'health') { initHealth(); return; }
   updateHeaderTitle();
 }
 
@@ -95,6 +96,7 @@ function renderMonthView(container) {
       for (const t of tasks) {
         html += renderTaskChip(t, 'month');
       }
+      html += renderMedChips(dateStr);
       html += `<button class="task-add-btn" onclick="openAddTaskOnDate('${dateStr}')">+ 新增</button>`;
       html += '</div>';
     }
@@ -150,6 +152,7 @@ function renderWeekView(container) {
     for (const t of tasks) {
       html += renderTaskChip(t, 'week');
     }
+    html += renderMedChips(dateStr);
     html += `<button class="week-add-btn" onclick="openAddTaskOnDate('${dateStr}')">
         <span style="font-size:14px;font-weight:300">+</span> 新增
       </button>`;
@@ -187,7 +190,9 @@ function renderDayView(container) {
   for (const t of tasks) {
     html += renderTaskChip(t, 'day');
   }
-  if (!tasks.length) html += '<div class="empty">今天沒有任務，新增一個吧！</div>';
+  const medChips = renderMedChips(dateStr);
+  if (medChips) html += `<div class="day-med-section"><div class="day-med-label">💊 今日用藥</div>${medChips}</div>`;
+  if (!tasks.length && !medChips) html += '<div class="empty">今天沒有任務，新增一個吧！</div>';
   html += `</div>
     <div class="day-notes-area">
       <div class="day-notes-label">📝 今日備註</div>
@@ -248,6 +253,20 @@ function renderTaskChip(t, mode) {
     ${catDot}
     <span class="task-text">${timeHint ? `<span style="color:var(--accent);font-size:9px;font-weight:600">${t.time_hint}</span> ` : ''}${escHtml(t.title)} ${heart}</span>
   </div>`;
+}
+
+function renderMedChips(dateStr) {
+  const logs = S.medLogs[dateStr];
+  if (!logs || !logs.length) return '';
+  return logs.map(log => {
+    const taken = log.taken;
+    const label = log.drug_name + (log.dosage ? ` ${log.dosage}` : '');
+    return `<div class="med-chip ${taken ? 'med-taken' : 'med-pending'}"
+      onclick="calToggleMed(${log.prescription_id},'${dateStr}',${!taken})" title="${escHtml(label)}">
+      <span class="med-chip-dot"></span>
+      <span class="med-chip-label">${escHtml(log.drug_name)}</span>
+    </div>`;
+  }).join('');
 }
 
 function escHtml(str) {

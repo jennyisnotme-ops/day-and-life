@@ -24,6 +24,7 @@ const HP = {
   pdfTo: '',
   prescriptions: [],
   todayLogs: [],
+  activeTab: 'today', // 'today' | 'rx' | 'bp'
 };
 
 // ── 初始化 ────────────────────────────────────────────────────────────
@@ -61,80 +62,136 @@ async function loadMyShares() {
 // ── 主視圖渲染 ────────────────────────────────────────────────────────
 function renderHealthView() {
   const content = document.getElementById('main-content');
-  const viewingName = HP.viewingOwner ? HP.viewingOwner.display_name : '我的';
   const today = new Date().toISOString().slice(0, 10);
 
-  content.innerHTML = `
-<div class="health-wrap">
+  const tabs = [
+    { id: 'today', label: '今日服藥' },
+    { id: 'rx',    label: '我的處方箋' },
+    { id: 'bp',    label: '我的血壓' },
+  ];
 
-  <!-- 今日服藥 -->
-  ${renderTodayMedSection(today)}
+  const tabBar = `<div class="health-tabs">
+    ${tabs.map(t => `<button class="health-tab ${HP.activeTab === t.id ? 'active' : ''}"
+      onclick="switchHealthTab('${t.id}')">${t.label}</button>`).join('')}
+  </div>`;
 
-  <!-- 領藥提醒 -->
-  ${renderRefillAlerts()}
+  let body = '';
+  if (HP.activeTab === 'today') {
+    body = renderTodayTab(today);
+  } else if (HP.activeTab === 'rx') {
+    body = renderRxTab();
+  } else {
+    body = renderBpTab();
+  }
 
-  <!-- 我的處方籤 -->
-  <div class="health-section">
-    <div class="health-section-header">
-      <h3>我的處方籤</h3>
-      <button class="btn btn-primary btn-sm" onclick="openAddPrescriptionModal()">+ 新增處方</button>
+  content.innerHTML = `<div class="health-wrap">${tabBar}${body}</div>`;
+}
+
+function switchHealthTab(tab) {
+  HP.activeTab = tab;
+  renderHealthView();
+}
+
+// ── 今日服藥 tab ──────────────────────────────────────────────────────
+function renderTodayTab(today) {
+  const alerts = renderRefillAlerts();
+  return `
+    ${alerts}
+    <div class="health-section">
+      <div class="health-section-header">
+        <h3>今日服藥</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" onclick="openManualLogModal('${today}')">手動紀錄</button>
+        </div>
+      </div>
+      ${renderTodayMedSection(today)}
+    </div>`;
+}
+
+// ── 處方箋 tab ────────────────────────────────────────────────────────
+function renderRxTab() {
+  return `
+    <div class="health-section">
+      <div class="health-section-header">
+        <h3>我的處方箋</h3>
+        <button class="btn btn-primary btn-sm" onclick="openAddPrescriptionModal()">+ 新增處方</button>
+      </div>
+      ${renderPrescriptionList()}
+    </div>`;
+}
+
+// ── 血壓 tab ──────────────────────────────────────────────────────────
+function renderBpTab() {
+  const viewingName = HP.viewingOwner ? HP.viewingOwner.display_name : '我的';
+  return `
+    <div class="health-topbar">
+      <div class="health-person-tabs">
+        <button class="person-tab ${!HP.viewingOwner ? 'active' : ''}" onclick="switchBpOwner(null)">我的</button>
+        ${HP.sharedWithMe.map(u => `
+          <button class="person-tab ${HP.viewingOwner?.id === u.id ? 'active' : ''}"
+            onclick="switchBpOwner(${JSON.stringify(u).replace(/"/g,'&quot;')})">
+            ${escHtml(u.display_name)}
+          </button>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px">
+        ${!HP.viewingOwner ? `<button class="btn btn-sm" onclick="openBpShareModal()">分享設定</button>` : ''}
+        ${!HP.viewingOwner ? `<button class="btn btn-primary btn-sm" onclick="openAddBpModal()">+ 新增記錄</button>` : ''}
+      </div>
     </div>
-    ${renderPrescriptionList()}
-  </div>
-
-  <!-- 血壓記錄 -->
-  <div class="health-topbar" style="margin-top:8px">
-    <div class="health-person-tabs">
-      <button class="person-tab ${!HP.viewingOwner ? 'active' : ''}" onclick="switchBpOwner(null)">我的血壓</button>
-      ${HP.sharedWithMe.map(u => `
-        <button class="person-tab ${HP.viewingOwner?.id === u.id ? 'active' : ''}"
-          onclick="switchBpOwner(${JSON.stringify(u).replace(/"/g,'&quot;')})">
-          ${escHtml(u.display_name)}
-        </button>
-      `).join('')}
-    </div>
-    <div style="display:flex;gap:8px;align-items:center">
-      ${!HP.viewingOwner ? `<button class="btn btn-sm" onclick="openBpShareModal()">分享設定</button>` : ''}
-      ${!HP.viewingOwner ? `<button class="btn btn-primary btn-sm" onclick="openAddBpModal()">+ 新增記錄</button>` : ''}
-    </div>
-  </div>
-
-  <div class="health-section">
-    <div class="health-section-header">
-      <h3>${escHtml(viewingName)}血壓記錄</h3>
-      <button class="btn btn-sm" onclick="openBpExportModal()">📄 匯出 PDF</button>
-    </div>
-    ${renderBpTable()}
-  </div>
-
-</div>`;
+    <div class="health-section">
+      <div class="health-section-header">
+        <h3>${escHtml(viewingName)}血壓記錄</h3>
+        <button class="btn btn-sm" onclick="openBpExportModal()">📄 匯出 PDF</button>
+      </div>
+      ${renderBpTable()}
+    </div>`;
 }
 
 // ── 今日服藥區塊 ──────────────────────────────────────────────────────
 function renderTodayMedSection(today) {
-  if (!HP.todayLogs.length) return '';
   const FREQ_LABEL = { morning:'早', noon:'中', evening:'晚', bedtime:'睡前' };
-  const items = HP.todayLogs.map(log => {
-    const freqStr = (log.frequency || []).map(f => FREQ_LABEL[f] || f).join('／') || '–';
-    const checked = log.taken ? 'checked' : '';
-    return `<div class="med-log-item ${log.taken ? 'taken' : ''}">
-      <input type="checkbox" ${checked} onchange="toggleMedLog(${log.prescription_id},'${today}',this.checked)"/>
-      <div class="med-log-info">
+  const RECUR_LABEL = { daily:'每天', every_other_day:'每雙日', weekly:'每週' };
+
+  const rxLogs = HP.todayLogs.filter(l => !l.is_manual);
+  const manualLogs = HP.todayLogs.filter(l => l.is_manual);
+
+  const rxItems = rxLogs.length
+    ? rxLogs.map(log => {
+        const freqStr = (log.frequency || []).map(f => FREQ_LABEL[f] || f).join('／') || '–';
+        const recurStr = log.recurrence ? RECUR_LABEL[log.recurrence] || '' : '';
+        return `<div class="med-log-item ${log.taken ? 'taken' : ''}">
+          <input type="checkbox" ${log.taken ? 'checked' : ''} onchange="toggleMedLog(${log.prescription_id},'${today}',this.checked)"/>
+          <div class="med-log-info">
+            <span class="med-name">${escHtml(log.drug_name)}${log.dosage ? ' ' + escHtml(log.dosage) : ''}</span>
+            <span class="med-freq">${freqStr}${recurStr ? '・' + recurStr : ''}</span>
+          </div>
+        </div>`;
+      }).join('')
+    : `<div style="color:var(--text3);font-size:13px;padding:8px 0">今日無處方用藥</div>`;
+
+  const manualItems = manualLogs.map(log => {
+    const timeStr = log.manual_time ? new Date(log.manual_time).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}) : '';
+    return `<div class="med-log-item taken" style="background:var(--bg3)">
+      <span style="font-size:16px;flex-shrink:0">💊</span>
+      <div class="med-log-info" style="flex:1">
         <span class="med-name">${escHtml(log.drug_name)}${log.dosage ? ' ' + escHtml(log.dosage) : ''}</span>
-        <span class="med-freq">${freqStr}</span>
+        <span class="med-freq">${timeStr ? timeStr + '・' : ''}臨時用藥${log.manual_note ? '・' + escHtml(log.manual_note) : ''}</span>
       </div>
+      <button class="btn-icon" style="color:#ef4444;flex-shrink:0" onclick="deleteManualLog(${log.id},'${today}')">✕</button>
     </div>`;
   }).join('');
 
-  const total = HP.todayLogs.length;
-  const done = HP.todayLogs.filter(l => l.taken).length;
+  const total = rxLogs.length;
+  const done = rxLogs.filter(l => l.taken).length;
 
-  return `<div class="health-section">
-    <div class="health-section-header">
-      <h3>今日服藥</h3>
-      <span style="font-size:13px;color:var(--text2)">${done} / ${total} 已服用</span>
+  return `<div class="med-log-list">
+    <div style="font-size:11px;font-weight:600;color:var(--text3);padding:4px 0 6px;text-transform:uppercase;letter-spacing:.05em">
+      處方用藥 ${total ? `${done}/${total} 已服用` : ''}
     </div>
-    <div class="med-log-list">${items}</div>
+    ${rxItems}
+    ${manualLogs.length ? `
+    <div style="font-size:11px;font-weight:600;color:var(--text3);padding:12px 0 6px;text-transform:uppercase;letter-spacing:.05em">臨時用藥</div>
+    ${manualItems}` : ''}
   </div>`;
 }
 
@@ -265,8 +322,18 @@ function buildRxForm(p = {}) {
         placeholder="${selectedCat?.detailPlaceholder || ''}"/>
     </div>
     <div>
-      <label>服藥時間</label>
+      <label>服藥時間（每次）</label>
       <div class="freq-group">${freqCheckboxes}</div>
+    </div>
+    <div>
+      <label>服藥頻率</label>
+      <div class="freq-group">
+        ${[{v:'daily',l:'每天'},{v:'every_other_day',l:'每雙日'},{v:'weekly',l:'每週'}].map(o=>`
+          <label class="freq-check">
+            <input type="radio" name="rx-recurrence" value="${o.v}" ${(p.recurrence||'daily')===o.v?'checked':''}/>
+            ${o.l}
+          </label>`).join('')}
+      </div>
     </div>
     <div class="form-row">
       <div><label>開始日期</label><input type="date" id="rx-start" value="${p.start_date?.slice(0,10) || ''}"/></div>
@@ -333,7 +400,8 @@ async function saveRx(id) {
   const dosage = document.getElementById('rx-dosage')?.value.trim();
   const category_code = document.getElementById('rx-category')?.value;
   const category_detail = document.getElementById('rx-detail')?.value.trim();
-  const frequency = [...document.querySelectorAll('.freq-check input:checked')].map(el => el.value);
+  const frequency = [...document.querySelectorAll('.freq-check input[type=checkbox]:checked')].map(el => el.value);
+  const recurrence = document.querySelector('input[name="rx-recurrence"]:checked')?.value || 'daily';
   const start_date = document.getElementById('rx-start')?.value || null;
   const refill_date = document.getElementById('rx-refill')?.value || null;
   const notes = document.getElementById('rx-notes')?.value.trim();
@@ -344,7 +412,7 @@ async function saveRx(id) {
   const cat = DISEASE_CATEGORIES.find(c => c.code === category_code);
   if (cat?.needDetail && !category_detail) { showToast('請填寫具體說明'); return; }
 
-  const body = { drug_name, dosage, category_code, category_detail, frequency, start_date, refill_date, notes };
+  const body = { drug_name, dosage, category_code, category_detail, frequency, recurrence, start_date, refill_date, notes };
   if (id) {
     const p = HP.prescriptions.find(x => x.id === id);
     await apiFetch(`/api/prescriptions/${id}`, { method: 'PUT', body: { ...body, is_active: p?.is_active ?? true } });
@@ -380,6 +448,60 @@ async function toggleMedLog(prescriptionId, date, taken) {
   await apiFetch('/api/medication-logs', { method: 'POST', body: { prescription_id: prescriptionId, log_date: date, taken } });
   await loadTodayLogs(date);
   renderHealthView();
+}
+
+// ── 手動紀錄臨時用藥 ──────────────────────────────────────────────────
+function openManualLogModal(date) {
+  const now = toLocalDateTimeInput(new Date());
+  showSmallModal('手動紀錄臨時用藥', `
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label>藥品名稱</label>
+        <input type="text" id="manual-drug" placeholder="例：降壓藥、普拿疼..." autocomplete="off"/>
+      </div>
+      <div>
+        <label>劑量（選填）</label>
+        <input type="text" id="manual-dosage" placeholder="例：1顆、10mg"/>
+      </div>
+      <div>
+        <label>服用時間</label>
+        <input type="datetime-local" id="manual-time" value="${now}" step="60"/>
+      </div>
+      <div>
+        <label>原因／備註（選填）</label>
+        <input type="text" id="manual-note" placeholder="例：急診醫生指示、血壓高於160"/>
+      </div>
+    </div>`, `
+    <button class="btn" onclick="closeModal('modal-small')">取消</button>
+    <button class="btn btn-primary" onclick="saveManualLog('${date}')">儲存</button>
+  `);
+}
+
+async function saveManualLog(date) {
+  const drug = document.getElementById('manual-drug')?.value.trim();
+  if (!drug) { showToast('請填寫藥品名稱'); return; }
+  const dosage = document.getElementById('manual-dosage')?.value.trim();
+  const timeVal = document.getElementById('manual-time')?.value;
+  const note = document.getElementById('manual-note')?.value.trim();
+  await apiFetch('/api/medication-logs/manual', { method: 'POST', body: {
+    log_date: date,
+    manual_drug_name: drug,
+    manual_dosage: dosage || null,
+    manual_time: timeVal ? new Date(timeVal).toISOString() : null,
+    manual_note: note || null,
+  }});
+  closeModal('modal-small');
+  await loadTodayLogs(date);
+  renderHealthView();
+  showToast('已記錄');
+}
+
+async function deleteManualLog(id, date) {
+  if (!confirm('確定刪除此筆臨時紀錄？')) return;
+  await apiFetch(`/api/medication-logs/manual/${id}`, { method: 'DELETE' });
+  await loadTodayLogs(date);
+  renderHealthView();
+  showToast('已刪除');
 }
 
 function renderBpTable() {

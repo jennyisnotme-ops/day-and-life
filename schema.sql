@@ -72,3 +72,61 @@ CREATE TABLE IF NOT EXISTS dal_sessions (
   expire TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS dal_sessions_expire_idx ON dal_sessions(expire);
+
+-- 藥品主檔（共用，越用越完整）
+CREATE TABLE IF NOT EXISTS dal_drug_master (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  dosage VARCHAR(100),
+  unit VARCHAR(50),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS dal_drug_master_name_idx ON dal_drug_master(name);
+
+-- 個人處方籤
+CREATE TABLE IF NOT EXISTS dal_prescriptions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES dal_users(id) ON DELETE CASCADE,
+  drug_name VARCHAR(200) NOT NULL,
+  dosage VARCHAR(100),
+  category_code VARCHAR(50) NOT NULL,
+  category_detail VARCHAR(200),
+  frequency TEXT[] DEFAULT '{}',
+  refill_date DATE,
+  start_date DATE,
+  notes TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS dal_prescriptions_user_idx ON dal_prescriptions(user_id);
+
+-- 每日服藥紀錄
+CREATE TABLE IF NOT EXISTS dal_medication_logs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES dal_users(id) ON DELETE CASCADE,
+  prescription_id INTEGER REFERENCES dal_prescriptions(id) ON DELETE CASCADE,
+  log_date DATE NOT NULL,
+  taken BOOLEAN DEFAULT FALSE,
+  UNIQUE(user_id, prescription_id, log_date)
+);
+CREATE INDEX IF NOT EXISTS dal_medication_logs_user_date_idx ON dal_medication_logs(user_id, log_date);
+
+-- 血壓記錄
+CREATE TABLE IF NOT EXISTS dal_bp_records (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES dal_users(id) ON DELETE CASCADE,
+  measured_at TIMESTAMPTZ NOT NULL,
+  systolic INTEGER NOT NULL,
+  diastolic INTEGER NOT NULL,
+  pulse INTEGER,
+  note TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS dal_bp_records_user_time_idx ON dal_bp_records(user_id, measured_at DESC);
+
+-- 血壓分享（owner 分享給 viewer，唯讀）
+CREATE TABLE IF NOT EXISTS dal_bp_shares (
+  owner_id INTEGER REFERENCES dal_users(id) ON DELETE CASCADE,
+  viewer_id INTEGER REFERENCES dal_users(id) ON DELETE CASCADE,
+  PRIMARY KEY (owner_id, viewer_id)
+);

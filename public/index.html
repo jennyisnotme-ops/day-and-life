@@ -77,6 +77,7 @@
           <button class="view-tab" data-view="week" onclick="switchView('week',this)">週</button>
           <button class="view-tab" data-view="day" onclick="switchView('day',this)">日</button>
           <button class="view-tab" data-view="stats" onclick="switchView('stats',this)">統計</button>
+          <button class="view-tab" data-view="health" onclick="switchView('health',this)">健康</button>
         </div>
         <button class="btn btn-primary btn-sm" onclick="openAddTaskOnDate(fmtDate(S.cursor))">+ 新增</button>
         <button class="btn btn-sm" id="inbox-toggle-btn" onclick="toggleInbox()" title="事項口袋">🛍️</button>
@@ -286,6 +287,7 @@
 <script src="/js/modal.js" defer></script>
 <script src="/js/stats.js" defer></script>
 <script src="/js/settings.js" defer></script>
+<script src="/js/health.js" defer></script>
 <script src="/js/main.js" defer></script>
 <button id="mobile-inbox-fab" onclick="toggleInbox()" title="事項口袋" style="display:none">🛍️</button>
 </body>
