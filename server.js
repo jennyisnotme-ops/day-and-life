@@ -795,7 +795,7 @@ async function initDb() {
   await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_dosage VARCHAR(100)`);
   await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_note TEXT`);
   await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_time TIMESTAMPTZ`);
-  await pool.query(`ALTER TABLE dal_medication_logs ALTER COLUMN prescription_id DROP NOT NULL`);
+  // prescription_id 本來就是 nullable，不需要額外 migration
 
   const { rows } = await pool.query('SELECT COUNT(*) FROM dal_users');
   if (rows[0].count === '0') {
