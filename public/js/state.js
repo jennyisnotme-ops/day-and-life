@@ -13,6 +13,8 @@ const S = {
   allUsers: [],
   holidays: {},
   _holidayYears: new Set(),
+  prescriptions: [],   // 使用者的 active 處方籤
+  medLogs: {},         // { 'YYYY-MM-DD': [{ prescription_id, taken, drug_name, dosage, frequency }] }
 };
 
 function getVisibleCalIds() {
@@ -99,6 +101,51 @@ async function loadInbox() {
   S.inbox = await API.getInbox(ids);
 }
 
+async function loadMedDataForView() {
+  // 載入處方籤（只需一次，不隨日期變動）
+  try {
+    S.prescriptions = await apiFetch('/api/prescriptions?active=1');
+  } catch { S.prescriptions = []; }
+  if (!S.prescriptions.length) { S.medLogs = {}; return; }
+
+  // 取出當前 view 的日期範圍
+  let start, end;
+  if (S.view === 'month') {
+    const r = getMonthRange(S.cursor.getFullYear(), S.cursor.getMonth() + 1);
+    start = fmtDate(r.start); end = fmtDate(r.end);
+  } else if (S.view === 'week') {
+    const ws = getWeekStart(S.cursor);
+    start = fmtDate(ws); end = fmtDate(addDays(ws, 6));
+  } else {
+    start = end = fmtDate(S.cursor);
+  }
+
+  // 先把所有日期 x 所有處方預填 taken: false
+  S.medLogs = {};
+  let cur = new Date(start + 'T00:00:00');
+  const endDate = new Date(end + 'T00:00:00');
+  while (cur <= endDate) {
+    const d = fmtDate(cur);
+    S.medLogs[d] = S.prescriptions.map(p => ({
+      prescription_id: p.id, log_date: d, taken: false,
+      drug_name: p.drug_name, dosage: p.dosage, frequency: p.frequency
+    }));
+    cur = new Date(cur.getTime() + 86400000);
+  }
+  // 再把實際記錄覆蓋上去
+  try {
+    const rows = await apiFetch(`/api/medication-logs/range?from=${start}&to=${end}`);
+    for (const r of rows) {
+      if (!r.log_date) continue;
+      const d = r.log_date.slice(0, 10);
+      if (S.medLogs[d]) {
+        const log = S.medLogs[d].find(l => l.prescription_id === r.prescription_id);
+        if (log) log.taken = r.taken || false;
+      }
+    }
+  } catch { /* 保留預設值 */ }
+}
+
 async function reloadData() {
   const year = S.cursor.getFullYear();
   await Promise.all([
@@ -107,5 +154,6 @@ async function reloadData() {
     loadInbox(),
     loadHolidaysForYear(year),
     loadHolidaysForYear(year + 1),
+    loadMedDataForView(),
   ]);
 }
