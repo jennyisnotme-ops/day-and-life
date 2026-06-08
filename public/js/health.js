@@ -327,13 +327,11 @@ function buildRxForm(p = {}) {
     </div>
     <div>
       <label>服藥頻率</label>
-      <div class="freq-group">
-        ${[{v:'daily',l:'每天'},{v:'every_other_day',l:'每雙日'},{v:'weekly',l:'每週'}].map(o=>`
-          <label class="freq-check">
-            <input type="radio" name="rx-recurrence" value="${o.v}" ${(p.recurrence||'daily')===o.v?'checked':''}/>
-            ${o.l}
-          </label>`).join('')}
-      </div>
+      <select id="rx-recurrence">
+        <option value="daily"          ${(p.recurrence||'daily')==='daily'          ?'selected':''}>每日</option>
+        <option value="every_other_day"${(p.recurrence||'daily')==='every_other_day'?'selected':''}>每雙日</option>
+        <option value="weekly"         ${(p.recurrence||'daily')==='weekly'         ?'selected':''}>每週</option>
+      </select>
     </div>
     <div class="form-row">
       <div><label>開始日期</label><input type="date" id="rx-start" value="${p.start_date?.slice(0,10) || ''}"/></div>
@@ -401,7 +399,7 @@ async function saveRx(id) {
   const category_code = document.getElementById('rx-category')?.value;
   const category_detail = document.getElementById('rx-detail')?.value.trim();
   const frequency = [...document.querySelectorAll('.freq-check input[type=checkbox]:checked')].map(el => el.value);
-  const recurrence = document.querySelector('input[name="rx-recurrence"]:checked')?.value || 'daily';
+  const recurrence = document.getElementById('rx-recurrence')?.value || 'daily';
   const start_date = document.getElementById('rx-start')?.value || null;
   const refill_date = document.getElementById('rx-refill')?.value || null;
   const notes = document.getElementById('rx-notes')?.value.trim();

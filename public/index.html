@@ -68,10 +68,14 @@
     <header class="main-header">
       <button class="btn-icon" id="mobile-menu-btn" onclick="toggleSidebar()" style="display:none">☰</button>
       <div class="header-title" id="header-title">2026年 6月</div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <button class="nav-btn" onclick="navigate(-1)">‹</button>
-        <button class="nav-btn today-btn" onclick="goToday()">今天</button>
-        <button class="nav-btn" onclick="navigate(1)">›</button>
+      <div class="header-right">
+        <div class="header-right-top">
+          <button class="nav-btn" onclick="navigate(-1)">‹</button>
+          <button class="nav-btn today-btn" onclick="goToday()">今天</button>
+          <button class="nav-btn" onclick="navigate(1)">›</button>
+          <button class="btn btn-primary btn-sm" onclick="openAddTaskOnDate(fmtDate(S.cursor))">+ 新增</button>
+          <button class="btn btn-sm" id="inbox-toggle-btn" onclick="toggleInbox()" title="事項口袋">🛍️</button>
+        </div>
         <div class="view-tabs">
           <button class="view-tab active" data-view="month" onclick="switchView('month',this)">月</button>
           <button class="view-tab" data-view="week" onclick="switchView('week',this)">週</button>
@@ -79,8 +83,6 @@
           <button class="view-tab" data-view="stats" onclick="switchView('stats',this)">統計</button>
           <button class="view-tab" data-view="health" onclick="switchView('health',this)">健康</button>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="openAddTaskOnDate(fmtDate(S.cursor))">+ 新增</button>
-        <button class="btn btn-sm" id="inbox-toggle-btn" onclick="toggleInbox()" title="事項口袋">🛍️</button>
       </div>
     </header>
 

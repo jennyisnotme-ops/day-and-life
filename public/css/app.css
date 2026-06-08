@@ -396,11 +396,13 @@
   .form-row{grid-template-columns:1fr}
   .stat-cards{grid-template-columns:1fr 1fr}
   /* Header: stack title on small screens */
-  .main-header{flex-wrap:wrap;gap:8px;padding:10px 12px}
-  .header-title{font-size:14px;min-width:0;word-break:break-all}
-  .view-tabs{overflow-x:auto;max-width:calc(100vw - 120px);scrollbar-width:none}
+  .main-header{flex-wrap:wrap;gap:6px;padding:8px 10px}
+  .header-title{font-size:13px;min-width:0}
+  .header-right{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+  .header-right-top{display:flex;align-items:center;gap:6px}
+  .view-tabs{overflow-x:auto;width:calc(100vw - 24px);scrollbar-width:none;background:var(--bg2);border-radius:var(--radius);padding:2px}
   .view-tabs::-webkit-scrollbar{display:none}
-  .view-tab{font-size:11px;padding:4px 8px;white-space:nowrap}
+  .view-tab{font-size:11px;padding:4px 10px;white-space:nowrap}
   /* Inbox: fullscreen overlay on mobile */
   .inbox-panel.open{
     position:fixed;inset:0;width:100%;z-index:90;
