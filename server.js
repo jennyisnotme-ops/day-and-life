@@ -291,7 +291,8 @@ app.get('/api/tasks', auth, async (req, res) => {
   if (!ids.length) return res.json([]);
   const { rows } = await pool.query(`
     SELECT t.*, cat.name as category_name, cat.color as category_color,
-      u.display_name as assigned_name, u.avatar_color as assigned_color
+      u.display_name as assigned_name, u.avatar_color as assigned_color,
+      (SELECT array_agg(tc.date::text) FROM dal_task_completions tc WHERE tc.task_id=t.id) as completed_dates
     FROM dal_tasks t
     LEFT JOIN dal_categories cat ON cat.id=t.category_id
     LEFT JOIN dal_users u ON u.id=t.assigned_to
@@ -352,6 +353,18 @@ app.post('/api/tasks', auth, async (req, res) => {
     console.error('POST /api/tasks error:', err);
     res.status(500).json({ error: '新增任務失敗：' + err.message });
   }
+});
+
+app.post('/api/tasks/:id/completion', auth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { date, completed } = req.body;
+  if (!date) return res.status(400).json({ error: '缺少日期' });
+  if (completed) {
+    await pool.query('INSERT INTO dal_task_completions(task_id,date) VALUES($1,$2) ON CONFLICT DO NOTHING', [id, date]);
+  } else {
+    await pool.query('DELETE FROM dal_task_completions WHERE task_id=$1 AND date=$2', [id, date]);
+  }
+  res.json({ ok: true });
 });
 
 app.patch('/api/tasks/:id', auth, async (req, res) => {
@@ -837,6 +850,11 @@ async function initDb() {
   await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_dosage VARCHAR(100)`);
   await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_note TEXT`);
   await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_time TIMESTAMPTZ`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS dal_task_completions (
+    task_id INT NOT NULL REFERENCES dal_tasks(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    PRIMARY KEY (task_id, date)
+  )`);
   // prescription_id 本來就是 nullable，不需要額外 migration
 
   const { rows } = await pool.query('SELECT COUNT(*) FROM dal_users');

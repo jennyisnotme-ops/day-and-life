@@ -172,12 +172,24 @@ async function doDeleteTaskGroup(groupId) {
   showToast('已刪除整個系列');
 }
 
-async function toggleTask(taskId, completed) {
+async function toggleTask(taskId, completed, date) {
   const task = S.tasks.find(t => t.id === taskId);
   if (!task) return;
-  task.completed = completed;
-  renderApp();
-  await API.updateTask(taskId, { completed });
+  const isMultiDay = task.end_date && task.end_date.slice(0,10) !== task.date?.slice(0,10);
+  if (isMultiDay && date) {
+    if (!task.completed_dates) task.completed_dates = [];
+    if (completed) {
+      if (!task.completed_dates.includes(date)) task.completed_dates.push(date);
+    } else {
+      task.completed_dates = task.completed_dates.filter(d => d !== date);
+    }
+    renderApp();
+    await API.toggleTaskCompletion(taskId, date, completed);
+  } else {
+    task.completed = completed;
+    renderApp();
+    await API.updateTask(taskId, { completed });
+  }
 }
 
 // ── Calendar Modal ──────────────────────────────────────────────────

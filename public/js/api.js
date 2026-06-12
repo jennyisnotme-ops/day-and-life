@@ -47,6 +47,7 @@ const API = {
   updateTaskGroup: (groupId, data) => apiFetch(`/api/tasks/group/${groupId}`, { method:'PATCH', body: data }),
   deleteTaskGroup: (groupId) => apiFetch(`/api/tasks/group/${groupId}`, { method:'DELETE' }),
   reorderTasks: (ordered_ids) => apiFetch('/api/tasks/reorder', { method:'POST', body:{ ordered_ids } }),
+  toggleTaskCompletion: (id, date, completed) => apiFetch(`/api/tasks/${id}/completion`, { method:'POST', body:{ date, completed } }),
 
   getNotes: (calId, dateFrom, dateTo) => apiFetch(`/api/notes?calendar_id=${calId}&date_from=${dateFrom}&date_to=${dateTo}`),
   saveNote: (data) => apiFetch('/api/notes', { method:'PUT', body: data }),

@@ -94,7 +94,7 @@ function renderMonthView(container) {
 
       html += `<div class="day-col${otherMonth?' other-month':''}" data-date="${dateStr}" ondragover="onDragOver(event)" ondrop="onDrop(event,'${dateStr}')">`;
       for (const t of tasks) {
-        html += renderTaskChip(t, 'month');
+        html += renderTaskChip(t, 'month', dateStr);
       }
       html += renderMedChips(dateStr);
       html += `<button class="task-add-btn" onclick="openAddTaskOnDate('${dateStr}')">+ 新增</button>`;
@@ -150,7 +150,7 @@ function renderWeekView(container) {
       <div class="week-task-list" data-date="${dateStr}" ondragover="onDragOver(event)" ondrop="onDrop(event,'${dateStr}')">`;
 
     for (const t of tasks) {
-      html += renderTaskChip(t, 'week');
+      html += renderTaskChip(t, 'week', dateStr);
     }
     html += renderMedChips(dateStr);
     html += `<button class="week-add-btn" onclick="openAddTaskOnDate('${dateStr}')">
@@ -188,7 +188,7 @@ function renderDayView(container) {
     <div class="day-task-list" data-date="${dateStr}">`;
 
   for (const t of tasks) {
-    html += renderTaskChip(t, 'day');
+    html += renderTaskChip(t, 'day', dateStr);
   }
   const medChips = renderMedChips(dateStr);
   if (medChips) html += `<div class="day-med-section"><div class="day-med-label">💊 今日用藥</div>${medChips}</div>`;
@@ -206,21 +206,29 @@ function renderDayView(container) {
 }
 
 // ── Task Chip ───────────────────────────────────────────────────────
-function renderTaskChip(t, mode) {
+function renderTaskChip(t, mode, dateStr) {
   const catDot = t.category_color
     ? `<span class="task-cat-dot" style="background:${t.category_color}"></span>` : '';
   const timeHint = t.time_hint ? `<span style="color:var(--text3);font-size:10px">${t.time_hint}</span>` : '';
   const heart = t.notes ? `<span style="font-size:9px;color:#f43f5e;line-height:1" title="${escHtml(t.notes)}">♥</span>` : '';
 
-  const multiDay = t.end_date && t.end_date.slice(0,10) !== t.date.slice(0,10)
+  const isMultiDay = t.end_date && t.end_date.slice(0,10) !== t.date?.slice(0,10);
+  const multiDay = isMultiDay
     ? `<span style="font-size:10px;color:var(--text3)" title="${t.date.slice(0,10)} ~ ${t.end_date.slice(0,10)}">↔</span>` : '';
 
+  const isDone = isMultiDay && dateStr
+    ? (t.completed_dates || []).includes(dateStr)
+    : t.completed;
+  const toggleCall = isMultiDay && dateStr
+    ? `toggleTask(${t.id},${!isDone},'${dateStr}')`
+    : `toggleTask(${t.id},${!isDone})`;
+
   if (mode === 'day') {
-    return `<div class="day-task-item${t.completed?' done':''}"
+    return `<div class="day-task-item${isDone?' done':''}"
       draggable="true" data-id="${t.id}" data-date="${t.date}"
       ondragstart="onDragStart(event,${t.id})"
       onclick="openEditTask(${t.id})">
-      <div class="task-check" onclick="event.stopPropagation();toggleTask(${t.id},${!t.completed})"></div>
+      <div class="task-check" onclick="event.stopPropagation();${toggleCall}"></div>
       <div style="flex:1">
         <div class="day-task-title">${escHtml(t.title)} ${multiDay} ${heart}</div>
         <div class="day-task-meta">
@@ -234,22 +242,22 @@ function renderTaskChip(t, mode) {
   }
 
   if (mode === 'week') {
-    return `<div class="week-task-item${t.completed?' done':''}"
+    return `<div class="week-task-item${isDone?' done':''}"
       draggable="true" data-id="${t.id}" data-date="${t.date}"
       ondragstart="onDragStart(event,${t.id})"
       onclick="openEditTask(${t.id})">
-      <div class="task-check" onclick="event.stopPropagation();toggleTask(${t.id},${!t.completed})"></div>
+      <div class="task-check" onclick="event.stopPropagation();${toggleCall}"></div>
       ${catDot}
       <span class="task-text">${escHtml(t.title)}${timeHint ? ' '+timeHint : ''} ${heart}</span>
     </div>`;
   }
 
   // month
-  return `<div class="task-item${t.completed?' done':''}"
+  return `<div class="task-item${isDone?' done':''}"
     draggable="true" data-id="${t.id}" data-date="${t.date}"
     ondragstart="onDragStart(event,${t.id})"
     onclick="openEditTask(${t.id})">
-    <div class="task-check" onclick="event.stopPropagation();toggleTask(${t.id},${!t.completed})"></div>
+    <div class="task-check" onclick="event.stopPropagation();${toggleCall}"></div>
     ${catDot}
     <span class="task-text">${timeHint ? `<span style="color:var(--accent);font-size:9px;font-weight:600">${t.time_hint}</span> ` : ''}${escHtml(t.title)} ${heart}</span>
   </div>`;
