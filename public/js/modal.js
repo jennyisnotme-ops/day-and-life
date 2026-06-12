@@ -66,7 +66,7 @@ function openEditTask(taskId) {
 
 function populateTaskCalendarSelect(selectedId) {
   const sel = document.getElementById('task-calendar');
-  sel.innerHTML = S.calendars.filter(c => S.visibleCalIds.includes(c.id)).map(c =>
+  sel.innerHTML = S.calendars.map(c =>
     `<option value="${c.id}" ${c.id == selectedId ? 'selected' : ''}>${c.name}</option>`
   ).join('');
   sel.onchange = () => populateTaskCategorySelect(parseInt(sel.value));

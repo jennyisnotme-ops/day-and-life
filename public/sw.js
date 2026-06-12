@@ -7,22 +7,24 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-  ));
-  self.clients.claim();
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then(clients => clients.forEach(c => c.postMessage({ type: 'SW_UPDATED' })))
+  );
 });
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // API calls: network only
   if (url.pathname.startsWith('/api/')) return;
-  // Assets: cache first, fallback network
+  // Network-first: always fetch latest, fallback to cache when offline
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
+    fetch(e.request).then(res => {
       const clone = res.clone();
       caches.open(CACHE).then(c => c.put(e.request, clone));
       return res;
-    }))
+    }).catch(() => caches.match(e.request))
   );
 });
