@@ -126,21 +126,30 @@ async function loadMedDataForView() {
   const endDate = new Date(end + 'T00:00:00');
   while (cur <= endDate) {
     const d = fmtDate(cur);
-    S.medLogs[d] = S.prescriptions.map(p => ({
+    S.medLogs[d] = S.prescriptions.filter(p =>
+      (!p.start_date || p.start_date.slice(0,10) <= d) &&
+      (!p.end_date   || p.end_date.slice(0,10)   >= d)
+    ).map(p => ({
       prescription_id: p.id, log_date: d, taken: false,
       drug_name: p.drug_name, dosage: p.dosage, frequency: p.frequency
     }));
     cur = new Date(cur.getTime() + 86400000);
   }
-  // 再把實際記錄覆蓋上去
+  // 再把實際記錄覆蓋上去（含停用的舊處方）
   try {
     const rows = await apiFetch(`/api/medication-logs/range?from=${start}&to=${end}`);
     for (const r of rows) {
       if (!r.log_date) continue;
       const d = r.log_date.slice(0, 10);
-      if (S.medLogs[d]) {
-        const log = S.medLogs[d].find(l => l.prescription_id === r.prescription_id);
-        if (log) log.taken = r.taken || false;
+      if (!S.medLogs[d]) continue;
+      const log = S.medLogs[d].find(l => l.prescription_id === r.prescription_id);
+      if (log) {
+        log.taken = r.taken || false;
+      } else {
+        S.medLogs[d].push({
+          prescription_id: r.prescription_id, log_date: d, taken: r.taken || false,
+          drug_name: r.drug_name, dosage: r.dosage, frequency: r.frequency
+        });
       }
     }
   } catch { /* 保留預設值 */ }
