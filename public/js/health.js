@@ -426,6 +426,7 @@ function buildRxForm(p = {}) {
     </div>
     <div class="form-row">
       <div><label>開始日期</label><input type="date" id="rx-start" value="${p.start_date?.slice(0,10) || ''}"/></div>
+      <div><label>結束日期</label><input type="date" id="rx-end" value="${p.end_date?.slice(0,10) || ''}"/></div>
       <div><label>下次領藥日</label><input type="date" id="rx-refill" value="${p.refill_date?.slice(0,10) || ''}"/></div>
     </div>
     <div>
@@ -492,6 +493,7 @@ async function saveRx(id) {
   const frequency = [...document.querySelectorAll('.freq-check input[type=checkbox]:checked')].map(el => el.value);
   const recurrence = document.getElementById('rx-recurrence')?.value || 'daily';
   const start_date = document.getElementById('rx-start')?.value || null;
+  const end_date = document.getElementById('rx-end')?.value || null;
   const refill_date = document.getElementById('rx-refill')?.value || null;
   const notes = document.getElementById('rx-notes')?.value.trim();
 
@@ -501,7 +503,7 @@ async function saveRx(id) {
   const cat = DISEASE_CATEGORIES.find(c => c.code === category_code);
   if (cat?.needDetail && !category_detail) { showToast('請填寫具體說明'); return; }
 
-  const body = { drug_name, dosage, category_code, category_detail, frequency, recurrence, start_date, refill_date, notes };
+  const body = { drug_name, dosage, category_code, category_detail, frequency, recurrence, start_date, end_date, refill_date, notes };
   if (id) {
     const p = HP.prescriptions.find(x => x.id === id);
     await apiFetch(`/api/prescriptions/${id}`, { method: 'PUT', body: { ...body, is_active: p?.is_active ?? true } });

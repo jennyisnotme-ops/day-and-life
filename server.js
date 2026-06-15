@@ -568,31 +568,31 @@ app.get('/api/prescriptions', auth, async (req, res) => {
 
 app.post('/api/prescriptions', auth, async (req, res) => {
   const uid = req.session.userId;
-  const { drug_name, dosage, category_code, category_detail, frequency, recurrence, refill_date, start_date, notes } = req.body;
+  const { drug_name, dosage, category_code, category_detail, frequency, recurrence, refill_date, start_date, end_date, notes } = req.body;
   if (!drug_name || !category_code) return res.status(400).json({ error: '缺少必填欄位' });
   await pool.query(
     'INSERT INTO dal_drug_master(name,dosage) VALUES($1,$2) ON CONFLICT DO NOTHING',
     [drug_name, dosage || null]
   );
   const { rows } = await pool.query(
-    `INSERT INTO dal_prescriptions(user_id,drug_name,dosage,category_code,category_detail,frequency,recurrence,refill_date,start_date,notes)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    `INSERT INTO dal_prescriptions(user_id,drug_name,dosage,category_code,category_detail,frequency,recurrence,refill_date,start_date,end_date,notes)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
     [uid, drug_name, dosage || null, category_code, category_detail || null,
-     frequency || [], recurrence || 'daily', refill_date || null, start_date || null, notes || null]
+     frequency || [], recurrence || 'daily', refill_date || null, start_date || null, end_date || null, notes || null]
   );
   res.json(rows[0]);
 });
 
 app.put('/api/prescriptions/:id', auth, async (req, res) => {
   const uid = req.session.userId;
-  const { drug_name, dosage, category_code, category_detail, frequency, recurrence, refill_date, start_date, notes, is_active } = req.body;
+  const { drug_name, dosage, category_code, category_detail, frequency, recurrence, refill_date, start_date, end_date, notes, is_active } = req.body;
   const { rows } = await pool.query(
     `UPDATE dal_prescriptions SET drug_name=$1,dosage=$2,category_code=$3,category_detail=$4,
-     frequency=$5,recurrence=$6,refill_date=$7,start_date=$8,notes=$9,is_active=$10
-     WHERE id=$11 AND user_id=$12 RETURNING *`,
+     frequency=$5,recurrence=$6,refill_date=$7,start_date=$8,end_date=$9,notes=$10,is_active=$11
+     WHERE id=$12 AND user_id=$13 RETURNING *`,
     [drug_name, dosage || null, category_code, category_detail || null,
-     frequency || [], recurrence || 'daily', refill_date || null, start_date || null, notes || null,
-     is_active ?? true, req.params.id, uid]
+     frequency || [], recurrence || 'daily', refill_date || null, start_date || null, end_date || null,
+     notes || null, is_active ?? true, req.params.id, uid]
   );
   if (!rows.length) return res.status(404).json({ error: '找不到' });
   res.json(rows[0]);
@@ -618,6 +618,8 @@ app.get('/api/medication-logs', auth, async (req, res) => {
     FROM dal_prescriptions p
     LEFT JOIN dal_medication_logs ml ON ml.prescription_id=p.id AND ml.log_date=$2 AND ml.user_id=$1 AND ml.is_manual=false
     WHERE p.user_id=$1 AND p.is_active=true
+      AND (p.start_date IS NULL OR p.start_date <= $2)
+      AND (p.end_date IS NULL OR p.end_date >= $2)
     ORDER BY p.created_at
   `, [uid, date]);
   // 手動紀錄
@@ -669,7 +671,9 @@ app.get('/api/medication-logs/history', auth, async (req, res) => {
     LEFT JOIN dal_medication_logs ml
       ON ml.prescription_id = p.id AND ml.log_date = dates.log_date
       AND ml.user_id = $1 AND ml.is_manual = false
-    WHERE p.user_id = $1 AND p.is_active = true
+    WHERE p.user_id = $1
+      AND (p.start_date IS NULL OR p.start_date <= dates.log_date)
+      AND (p.end_date IS NULL OR p.end_date >= dates.log_date)
     ORDER BY dates.log_date, p.created_at
   `, [uid, from, to]);
 
@@ -697,7 +701,11 @@ app.get('/api/medication-logs/range', auth, async (req, res) => {
     FROM dal_prescriptions p
     LEFT JOIN dal_medication_logs ml
       ON ml.prescription_id=p.id AND ml.user_id=$1 AND ml.log_date BETWEEN $2 AND $3
-    WHERE p.user_id=$1 AND p.is_active=true
+    WHERE p.user_id=$1 AND (
+      (p.is_active=true AND (p.start_date IS NULL OR p.start_date <= $3) AND (p.end_date IS NULL OR p.end_date >= $2))
+      OR
+      EXISTS (SELECT 1 FROM dal_medication_logs ml2 WHERE ml2.prescription_id=p.id AND ml2.user_id=$1 AND ml2.log_date BETWEEN $2 AND $3)
+    )
     ORDER BY p.created_at, ml.log_date
   `, [uid, from, to]);
   res.json(rows);
@@ -850,6 +858,7 @@ async function initDb() {
   await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_dosage VARCHAR(100)`);
   await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_note TEXT`);
   await pool.query(`ALTER TABLE dal_medication_logs ADD COLUMN IF NOT EXISTS manual_time TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE dal_prescriptions ADD COLUMN IF NOT EXISTS end_date DATE`);
   await pool.query(`CREATE TABLE IF NOT EXISTS dal_task_completions (
     task_id INT NOT NULL REFERENCES dal_tasks(id) ON DELETE CASCADE,
     date DATE NOT NULL,
