@@ -74,7 +74,7 @@
           <button class="nav-btn today-btn" onclick="goToday()">今天</button>
           <button class="nav-btn" onclick="navigate(1)">›</button>
           <button class="btn btn-primary btn-sm" onclick="openAddTaskOnDate(fmtDate(S.cursor))">+ 新增</button>
-          <button class="btn btn-sm" id="inbox-toggle-btn" onclick="toggleInbox()" title="事項口袋">🛍️</button>
+          <button class="btn btn-sm" id="inbox-toggle-btn" onclick="toggleInbox()" title="事項口袋" style="position:relative">🛍️<span id="inbox-badge" class="inbox-badge" style="display:none"></span></button>
         </div>
         <div class="view-tabs">
           <button class="view-tab active" data-view="month" onclick="switchView('month',this)">月</button>
@@ -291,6 +291,6 @@
 <script src="/js/settings.js" defer></script>
 <script src="/js/health.js" defer></script>
 <script src="/js/main.js" defer></script>
-<button id="mobile-inbox-fab" onclick="toggleInbox()" title="事項口袋" style="display:none">🛍️</button>
+<button id="mobile-inbox-fab" onclick="toggleInbox()" title="事項口袋" style="display:none;position:relative">🛍️<span id="inbox-badge-mobile" class="inbox-badge" style="display:none"></span></button>
 </body>
 </html>

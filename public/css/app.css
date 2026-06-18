@@ -422,6 +422,16 @@
   #mobile-inbox-fab{display:flex}
 }
 
+/* ── Inbox badge ───────────────────────────────────────────────────── */
+.inbox-badge{
+  position:absolute;top:-6px;right:-6px;
+  min-width:16px;height:16px;padding:0 4px;
+  background:#ef4444;color:#fff;
+  font-size:10px;font-weight:700;line-height:16px;
+  border-radius:999px;text-align:center;
+  pointer-events:none;
+}
+
 /* ── Mobile inbox FAB ──────────────────────────────────────────────── */
 #mobile-inbox-fab{
   display:none;

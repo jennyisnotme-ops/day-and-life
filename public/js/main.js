@@ -134,9 +134,24 @@ async function deleteInboxTask(taskId) {
   showToast('已刪除');
 }
 
+function updateInboxBadge() {
+  const count = S.inbox.length;
+  ['inbox-badge', 'inbox-badge-mobile'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (count > 0) {
+      el.textContent = count > 99 ? '99+' : count;
+      el.style.display = 'block';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+}
+
 function renderInbox() {
   const list = document.getElementById('inbox-list');
   if (!list) return;
+  updateInboxBadge();
   if (!S.inbox.length) {
     list.innerHTML = '<div class="inbox-empty">口袋是空的～<br>新增一些待安排事項吧！</div>';
     return;
