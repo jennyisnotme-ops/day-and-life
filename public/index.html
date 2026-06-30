@@ -164,6 +164,17 @@
         <label>備註（選填）</label>
         <textarea id="task-notes" rows="3" placeholder="記錄後續、補充說明..."></textarea>
       </div>
+      <div>
+        <label>連結里程碑（選填）</label>
+        <div class="form-row">
+          <select id="task-link-project" onchange="populateTaskMilestoneSelect()">
+            <option value="">── 不連結 ──</option>
+          </select>
+          <select id="task-link-milestone" style="display:none">
+            <option value="">── 選里程碑 ──</option>
+          </select>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-danger btn-sm" id="task-delete-btn" style="display:none;margin-right:auto" onclick="deleteCurrentTask()">刪除</button>

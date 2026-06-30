@@ -1,6 +1,7 @@
 'use strict';
 let _editingTaskId = null;
 let _pendingSave = null;
+let _linkMilestoneId = null;
 
 async function doSaveSingleTask(generateSeries = false) {
   closeModal('modal-small');
@@ -9,6 +10,7 @@ async function doSaveSingleTask(generateSeries = false) {
     const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType, repeat_until: repeatUntil, notes, generate_series: generateSeries });
     const idx = S.tasks.findIndex(t => t.id === _editingTaskId);
     if (idx >= 0) S.tasks[idx] = { ...S.tasks[idx], ...updated };
+    await linkMilestoneToTask(_editingTaskId);
   } catch(err) { showToast('錯誤：' + err.message); return; }
   closeModal('modal-add-task');
   showToast(generateSeries ? '已更新並展開系列' : '已更新');
@@ -29,6 +31,7 @@ async function doSaveTaskGroup() {
 // ── Task Modal ──────────────────────────────────────────────────────
 function openAddTaskOnDate(dateStr) {
   _editingTaskId = null;
+  _linkMilestoneId = null;
   document.getElementById('task-modal-title').textContent = '新增任務';
   document.getElementById('task-delete-btn').style.display = 'none';
   document.getElementById('task-date').value = dateStr;
@@ -41,6 +44,7 @@ function openAddTaskOnDate(dateStr) {
   document.getElementById('repeat-until-wrap').style.display = 'none';
   populateTaskCalendarSelect();
   populateTaskCategorySelect();
+  populateTaskProjectSelect();
   openModal('add-task');
   setTimeout(() => document.getElementById('task-title').focus(), 80);
 }
@@ -49,6 +53,7 @@ function openEditTask(taskId) {
   const task = S.tasks.find(t => t.id === taskId) || S.inbox.find(t => t.id === taskId);
   if (!task) return;
   _editingTaskId = taskId;
+  _linkMilestoneId = null;
   document.getElementById('task-modal-title').textContent = '編輯任務';
   document.getElementById('task-delete-btn').style.display = '';
   document.getElementById('task-date').value = task.date ? task.date.slice(0,10) : '';
@@ -61,6 +66,7 @@ function openEditTask(taskId) {
   toggleRepeatUntil(task.repeat_type || 'none');
   populateTaskCalendarSelect(task.calendar_id);
   populateTaskCategorySelect(task.calendar_id, task.category_id);
+  populateTaskProjectSelect();
   openModal('add-task');
 }
 
@@ -70,6 +76,49 @@ function populateTaskCalendarSelect(selectedId) {
     `<option value="${c.id}" ${c.id == selectedId ? 'selected' : ''}>${c.name}</option>`
   ).join('');
   sel.onchange = () => populateTaskCategorySelect(parseInt(sel.value));
+}
+
+function populateTaskProjectSelect(selectedProjId) {
+  const projSel = document.getElementById('task-link-project');
+  const msSel = document.getElementById('task-link-milestone');
+  if (!projSel) return;
+  projSel.innerHTML = `<option value="">── 不連結 ──</option>` +
+    (PP.projects || []).map(p =>
+      `<option value="${p.id}" ${p.id == selectedProjId ? 'selected' : ''}>${escHtml(p.name)}</option>`
+    ).join('');
+  msSel.style.display = 'none';
+  msSel.innerHTML = '';
+  _linkMilestoneId = null;
+}
+
+function populateTaskMilestoneSelect() {
+  const projSel = document.getElementById('task-link-project');
+  const msSel = document.getElementById('task-link-milestone');
+  const projId = parseInt(projSel.value);
+  _linkMilestoneId = null;
+  if (!projId) { msSel.style.display = 'none'; return; }
+  const milestones = (PP.milestones[projId] || []).filter(m => m.status !== 'done');
+  msSel.innerHTML = `<option value="">── 選里程碑 ──</option>` +
+    milestones.map(m => {
+      const due = m.due_date ? ` (${m.due_date.slice(5).replace('-','/')})` : '';
+      return `<option value="${m.id}">${escHtml(m.title)}${due}</option>`;
+    }).join('');
+  msSel.style.display = milestones.length ? '' : 'none';
+  msSel.onchange = () => { _linkMilestoneId = parseInt(msSel.value) || null; };
+}
+
+async function linkMilestoneToTask(taskId) {
+  if (!_linkMilestoneId || !taskId) return;
+  const msId = _linkMilestoneId;
+  _linkMilestoneId = null;
+  try {
+    const updated = await apiFetch(`/api/milestones/${msId}`, { method:'PATCH', body: { linked_task_id: taskId } });
+    // update in-memory cache
+    for (const ms of Object.values(PP.milestones || {})) {
+      const m = ms.find(m => m.id === msId);
+      if (m) { m.linked_task_id = taskId; m.linked_task_title = updated.linked_task_title; break; }
+    }
+  } catch(e) { /* silent — task is saved, link is optional */ }
 }
 
 function populateTaskCategorySelect(calId, selectedCatId) {
@@ -116,9 +165,11 @@ async function saveTask() {
       const updated = await API.updateTask(_editingTaskId, { title, date, end_date: endDate, calendar_id: calendarId, category_id: categoryId, time_hint: timeHint, repeat_type: repeatType, repeat_until: repeatUntil, notes });
       const idx = S.tasks.findIndex(t => t.id === _editingTaskId);
       if (idx >= 0) S.tasks[idx] = { ...S.tasks[idx], ...updated };
+      await linkMilestoneToTask(_editingTaskId);
     } else {
       const newTask = await API.createTask({ calendar_id: calendarId, category_id: categoryId, title, date, end_date: endDate, time_hint: timeHint, repeat_type: repeatType, repeat_until: repeatUntil, notes });
       S.tasks.push(newTask);
+      await linkMilestoneToTask(newTask.id);
     }
   } catch (err) {
     console.error('saveTask error:', err);
