@@ -9,6 +9,7 @@ const PP = {
   linkedTaskId: null,
   linkedTaskTitle: null,
   taskSearchTimer: null,
+  taskSearchResults: [],
 };
 
 // ── Load ──────────────────────────────────────────────────────────────
@@ -245,9 +246,10 @@ function onTaskSearch(q) {
     try {
       const tasks = await apiFetch(`/api/tasks/search?q=${encodeURIComponent(q.trim())}`);
       if (!tasks.length) { resultsEl.style.display = 'none'; return; }
-      resultsEl.innerHTML = tasks.map(t => {
+      PP.taskSearchResults = tasks;
+      resultsEl.innerHTML = tasks.map((t, i) => {
         const dateStr = t.date ? t.date.slice(0,10) : '無日期';
-        return `<div class="task-search-item" onclick="selectLinkedTask(${t.id}, ${JSON.stringify(escHtml(t.title))})">
+        return `<div class="task-search-item" onmousedown="selectLinkedTask(${i})">
           <span>${escHtml(t.title)}</span>
           <span class="task-search-meta">${dateStr}${t.category_name ? ' · ' + escHtml(t.category_name) : ''}</span>
         </div>`;
@@ -257,15 +259,17 @@ function onTaskSearch(q) {
   }, 300);
 }
 
-function selectLinkedTask(taskId, taskTitle) {
-  PP.linkedTaskId = taskId;
-  PP.linkedTaskTitle = taskTitle;
-  document.getElementById('ms-task-search').value = taskTitle;
+function selectLinkedTask(idx) {
+  const t = PP.taskSearchResults[idx];
+  if (!t) return;
+  PP.linkedTaskId = t.id;
+  PP.linkedTaskTitle = t.title;
+  document.getElementById('ms-task-search').value = t.title;
   document.getElementById('ms-task-results').style.display = 'none';
   const chip = document.getElementById('ms-linked-chip');
   if (chip) {
     chip.style.display = 'inline-flex';
-    chip.innerHTML = `↗ ${escHtml(taskTitle)} <span style="color:#ef4444;font-size:10px;margin-left:4px" onclick="clearLinkedTask()">✕</span>`;
+    chip.innerHTML = `↗ ${escHtml(t.title)} <span style="color:#ef4444;font-size:10px;margin-left:4px" onclick="clearLinkedTask()">✕</span>`;
   }
 }
 
