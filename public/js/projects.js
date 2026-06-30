@@ -3,13 +3,16 @@
 const PP = {
   projects: [],
   milestones: {},      // { [project_id]: milestone[] }
-  editProjId: null,    // null = new project
-  editMsId: null,      // null = new milestone
+  collapsed: new Set(), // project ids that are collapsed
+  editProjId: null,
+  editMsId: null,
   editMsProjId: null,
   linkedTaskId: null,
   linkedTaskTitle: null,
   taskSearchTimer: null,
   taskSearchResults: [],
+  dragSrcMsId: null,
+  dragSrcProjId: null,
 };
 
 // ── Load ──────────────────────────────────────────────────────────────
@@ -70,29 +73,48 @@ function renderProjectsView() {
   content.innerHTML = `<div class="proj-view">${toolbar}${cards}</div>`;
 }
 
+function toggleProjectCollapse(projId) {
+  if (PP.collapsed.has(projId)) PP.collapsed.delete(projId);
+  else PP.collapsed.add(projId);
+  renderProjectsView();
+}
+
 function renderProjectCard(proj) {
   const ms = PP.milestones[proj.id] || [];
   const today = fmtDate(new Date());
-  const sorted = [...ms].sort((a, b) => {
-    const da = a.due_date ? a.due_date.slice(0,10) : '9999-99-99';
-    const db = b.due_date ? b.due_date.slice(0,10) : '9999-99-99';
-    return da < db ? -1 : da > db ? 1 : 0;
-  });
+  const sorted = [...ms].sort((a, b) => a.sort_order - b.sort_order || (a.id - b.id));
+  const isCollapsed = PP.collapsed.has(proj.id);
+
+  // count urgent for collapsed badge
+  const urgentCount = sorted.filter(m => {
+    if (m.status === 'done' || !m.due_date) return false;
+    const daysLeft = Math.ceil((parseDate(m.due_date) - parseDate(today)) / 86400000);
+    return daysLeft <= (m.remind_days_before ?? 3);
+  }).length;
 
   const msHtml = sorted.map(m => renderMilestoneRow(m, today)).join('');
+  const arrow = isCollapsed ? '▸' : '▾';
+  const collapsedBadge = isCollapsed && urgentCount > 0
+    ? `<span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px">${urgentCount}</span>`
+    : '';
+
   return `<div class="proj-card" style="border-left-color:${escHtml(proj.color)}">
-    <div class="proj-card-header">
+    <div class="proj-card-header" onclick="toggleProjectCollapse(${proj.id})" style="cursor:pointer">
+      <span style="color:var(--text3);font-size:13px;margin-right:2px">${arrow}</span>
       <span class="proj-dot" style="background:${escHtml(proj.color)}"></span>
       <span class="proj-name">${escHtml(proj.name)}</span>
-      <div class="proj-actions">
+      ${collapsedBadge}
+      <div class="proj-actions" onclick="event.stopPropagation()">
         <button class="ms-btn" onclick="openProjectModal(${proj.id})" title="編輯">✎</button>
         <button class="ms-btn" onclick="deleteProject(${proj.id})" title="刪除" style="color:#ef4444">✕</button>
       </div>
     </div>
-    <div class="proj-milestones">
+    ${isCollapsed ? '' : `<div class="proj-milestones"
+        ondragover="onMsDragOver(event)"
+        ondrop="onMsDrop(event,${proj.id})">
       ${msHtml}
       <button class="proj-add-ms" onclick="openMilestoneModal(${proj.id}, null)">＋ 新增里程碑</button>
-    </div>
+    </div>`}
   </div>`;
 }
 
@@ -118,7 +140,13 @@ function renderMilestoneRow(m, today) {
     ? `<span class="ms-linked" title="${escHtml(m.linked_task_title||'')}">↗ ${escHtml(m.linked_task_title||'任務')}${m.linked_task_done ? ' ✓' : ''}</span>`
     : '';
 
-  return `<div class="ms-row ${isDone ? 'ms-done' : ''}">
+  return `<div class="ms-row ${isDone ? 'ms-done' : ''}"
+      draggable="true"
+      data-ms-id="${m.id}"
+      data-proj-id="${m.project_id}"
+      ondragstart="onMsDragStart(event,${m.id},${m.project_id})"
+      ondragend="onMsDragEnd(event)">
+    <span class="ms-drag-handle" title="拖曳排序">⠿</span>
     <button class="ms-check" onclick="toggleMilestone(${m.id}, ${m.project_id})">${isDone ? '✓' : ''}</button>
     <span class="ms-title">${escHtml(m.title)}</span>
     ${linkedHtml}
@@ -313,6 +341,55 @@ async function deleteMilestone(msId, projId) {
     renderProjectsView();
     showToast('已刪除');
   } catch(e) { showToast('錯誤：' + e.message); }
+}
+
+// ── Drag & Drop milestones ────────────────────────────────────────────
+function onMsDragStart(e, msId, projId) {
+  PP.dragSrcMsId = msId;
+  PP.dragSrcProjId = projId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.classList.add('ms-dragging');
+}
+
+function onMsDragEnd(e) {
+  e.currentTarget.classList.remove('ms-dragging');
+  document.querySelectorAll('.ms-drag-over').forEach(el => el.classList.remove('ms-drag-over'));
+}
+
+function onMsDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const row = e.target.closest('.ms-row');
+  document.querySelectorAll('.ms-drag-over').forEach(el => el.classList.remove('ms-drag-over'));
+  if (row && row.dataset.msId != PP.dragSrcMsId) row.classList.add('ms-drag-over');
+}
+
+async function onMsDrop(e, projId) {
+  e.preventDefault();
+  document.querySelectorAll('.ms-drag-over').forEach(el => el.classList.remove('ms-drag-over'));
+  const srcId = PP.dragSrcMsId;
+  if (!srcId || PP.dragSrcProjId !== projId) return;
+
+  const targetRow = e.target.closest('.ms-row');
+  const targetId = targetRow ? parseInt(targetRow.dataset.msId) : null;
+  if (!targetId || targetId === srcId) return;
+
+  const ms = PP.milestones[projId];
+  if (!ms) return;
+  const srcIdx = ms.findIndex(m => m.id === srcId);
+  const tgtIdx = ms.findIndex(m => m.id === targetId);
+  if (srcIdx === -1 || tgtIdx === -1) return;
+
+  // reorder in memory
+  const [moved] = ms.splice(srcIdx, 1);
+  ms.splice(tgtIdx, 0, moved);
+  ms.forEach((m, i) => { m.sort_order = i; });
+  renderProjectsView();
+
+  // persist
+  try {
+    await apiFetch('/api/milestones/reorder', { method:'POST', body: { ordered_ids: ms.map(m => m.id) } });
+  } catch(e) { /* silent */ }
 }
 
 async function toggleMilestone(msId, projId) {

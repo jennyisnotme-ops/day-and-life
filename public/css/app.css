@@ -482,6 +482,10 @@
 .ms-btn{border:none;background:none;cursor:pointer;font-size:13px;color:var(--text3);padding:2px 4px;border-radius:4px;opacity:0;transition:opacity .15s}
 .ms-row:hover .ms-btn{opacity:1}
 .ms-btn:hover{background:var(--bg3);color:var(--text)}
+.ms-drag-handle{font-size:14px;color:var(--text3);cursor:grab;opacity:0;transition:opacity .15s;flex-shrink:0;padding:0 2px}
+.ms-row:hover .ms-drag-handle{opacity:1}
+.ms-dragging{opacity:.4}
+.ms-drag-over{border-top:2px solid var(--accent)}
 .proj-add-ms{width:100%;padding:9px 16px;border:none;background:transparent;text-align:left;font-size:13px;color:var(--text3);cursor:pointer;display:block}
 .proj-add-ms:hover{background:var(--bg2);color:var(--accent)}
 .proj-empty{text-align:center;padding:60px 20px;color:var(--text3)}

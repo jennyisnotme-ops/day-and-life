@@ -601,6 +601,15 @@ app.patch('/api/milestones/:id', auth, async (req, res) => {
   res.json(rows[0]);
 });
 
+app.post('/api/milestones/reorder', auth, async (req, res) => {
+  const { ordered_ids } = req.body;
+  if (!Array.isArray(ordered_ids)) return res.status(400).json({ error: '缺少 ordered_ids' });
+  for (let i = 0; i < ordered_ids.length; i++) {
+    await pool.query('UPDATE dal_milestones SET sort_order=$1 WHERE id=$2', [i, ordered_ids[i]]);
+  }
+  res.json({ ok: true });
+});
+
 app.delete('/api/milestones/:id', auth, async (req, res) => {
   const id = parseInt(req.params.id);
   const { rows: check } = await pool.query(`
