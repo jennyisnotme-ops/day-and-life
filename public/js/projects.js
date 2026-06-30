@@ -168,11 +168,11 @@ async function saveProject() {
   if (!name) { showToast('請輸入專案名稱'); return; }
   try {
     if (PP.editProjId) {
-      const updated = await apiFetch(`/api/projects/${PP.editProjId}`, { method:'PATCH', body: JSON.stringify({ name, color }) });
+      const updated = await apiFetch(`/api/projects/${PP.editProjId}`, { method:'PATCH', body: { name, color } });
       const idx = PP.projects.findIndex(p => p.id === PP.editProjId);
       if (idx >= 0) PP.projects[idx] = { ...PP.projects[idx], ...updated };
     } else {
-      const created = await apiFetch('/api/projects', { method:'POST', body: JSON.stringify({ name, color }) });
+      const created = await apiFetch('/api/projects', { method:'POST', body: { name, color } });
       PP.projects.push(created);
       PP.milestones[created.id] = [];
     }
@@ -287,10 +287,10 @@ async function saveMilestone() {
   try {
     const payload = { title, due_date: dueDate, remind_days_before: remindDays, linked_task_id: PP.linkedTaskId || null };
     if (PP.editMsId) {
-      await apiFetch(`/api/milestones/${PP.editMsId}`, { method:'PATCH', body: JSON.stringify(payload) });
+      await apiFetch(`/api/milestones/${PP.editMsId}`, { method:'PATCH', body: payload });
     } else {
       payload.project_id = projId;
-      await apiFetch('/api/milestones', { method:'POST', body: JSON.stringify(payload) });
+      await apiFetch('/api/milestones', { method:'POST', body: payload });
     }
     closeModal('modal-small');
     await reloadProjectMilestones(projId);
