@@ -8,6 +8,7 @@ function renderApp() {
   else if (S.view === 'day') renderDayView(content);
   else if (S.view === 'stats') renderStatsView(content);
   else if (S.view === 'health') { initHealth(); return; }
+  else if (S.view === 'projects') { renderProjectsView(); return; }
   updateHeaderTitle();
 }
 

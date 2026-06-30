@@ -20,6 +20,7 @@ async function loadAppData(settings) {
     API.getCategories(),
     API.getUsers(),
   ]);
+  loadProjects().catch(() => {});
 
   // Restore visible calendars from settings, fallback to all
   const savedIds = settings?.visible_calendar_ids || [];

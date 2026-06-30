@@ -3,8 +3,12 @@ const express = require('express');
 const session = require('express-session');
 const PgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcrypt');
-const { Pool } = require('pg');
+const pg = require('pg');
+const { Pool } = pg;
 const path = require('path');
+
+// Return DATE columns as plain strings (e.g. "2026-07-31") to avoid timezone shift
+pg.types.setTypeParser(1082, val => val);
 
 const app = express();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -486,6 +490,127 @@ app.post('/api/tasks/reorder', auth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Task Search ───────────────────────────────────────────────────────
+app.get('/api/tasks/search', auth, async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 1) return res.json([]);
+  const { rows: calRows } = await pool.query(
+    'SELECT calendar_id FROM dal_calendar_members WHERE user_id=$1', [req.session.userId]
+  );
+  const calIds = calRows.map(r => r.calendar_id);
+  if (!calIds.length) return res.json([]);
+  const { rows } = await pool.query(`
+    SELECT t.id, t.title, t.date, t.completed, cat.name as category_name
+    FROM dal_tasks t
+    LEFT JOIN dal_categories cat ON cat.id = t.category_id
+    WHERE t.calendar_id = ANY($1) AND t.title ILIKE $2
+    ORDER BY t.date DESC NULLS LAST, t.id DESC
+    LIMIT 20
+  `, [calIds, `%${q.trim()}%`]);
+  res.json(rows);
+});
+
+// ── Projects ──────────────────────────────────────────────────────────
+app.get('/api/projects', auth, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT * FROM dal_projects WHERE user_id=$1 AND archived=false ORDER BY sort_order, id',
+    [req.session.userId]
+  );
+  res.json(rows);
+});
+
+app.post('/api/projects', auth, async (req, res) => {
+  const { name, color } = req.body;
+  if (!name) return res.status(400).json({ error: '缺少名稱' });
+  const { rows: orderRows } = await pool.query('SELECT COALESCE(MAX(sort_order),0)+1 as next FROM dal_projects WHERE user_id=$1', [req.session.userId]);
+  const { rows } = await pool.query(
+    'INSERT INTO dal_projects(user_id,name,color,sort_order) VALUES($1,$2,$3,$4) RETURNING *',
+    [req.session.userId, name, color || '#2563eb', orderRows[0].next]
+  );
+  res.json(rows[0]);
+});
+
+app.patch('/api/projects/:id', auth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { name, color, archived } = req.body;
+  const { rows: check } = await pool.query('SELECT user_id FROM dal_projects WHERE id=$1', [id]);
+  if (!check[0] || check[0].user_id !== req.session.userId) return res.status(403).json({ error: 'Forbidden' });
+  if (name !== undefined) await pool.query('UPDATE dal_projects SET name=$1 WHERE id=$2', [name, id]);
+  if (color !== undefined) await pool.query('UPDATE dal_projects SET color=$1 WHERE id=$2', [color, id]);
+  if (archived !== undefined) await pool.query('UPDATE dal_projects SET archived=$1 WHERE id=$2', [archived, id]);
+  const { rows } = await pool.query('SELECT * FROM dal_projects WHERE id=$1', [id]);
+  res.json(rows[0]);
+});
+
+app.delete('/api/projects/:id', auth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { rows: check } = await pool.query('SELECT user_id FROM dal_projects WHERE id=$1', [id]);
+  if (!check[0] || check[0].user_id !== req.session.userId) return res.status(403).json({ error: 'Forbidden' });
+  await pool.query('DELETE FROM dal_projects WHERE id=$1', [id]);
+  res.json({ ok: true });
+});
+
+// ── Milestones ────────────────────────────────────────────────────────
+app.get('/api/projects/:id/milestones', auth, async (req, res) => {
+  const pid = parseInt(req.params.id);
+  const { rows: check } = await pool.query('SELECT user_id FROM dal_projects WHERE id=$1', [pid]);
+  if (!check[0] || check[0].user_id !== req.session.userId) return res.status(403).json({ error: 'Forbidden' });
+  const { rows } = await pool.query(`
+    SELECT m.id, m.project_id, m.title, m.due_date::text as due_date, m.status,
+           m.remind_days_before, m.linked_task_id, m.sort_order, m.created_at,
+           t.title as linked_task_title, t.completed as linked_task_done
+    FROM dal_milestones m
+    LEFT JOIN dal_tasks t ON t.id = m.linked_task_id
+    WHERE m.project_id=$1
+    ORDER BY m.sort_order, m.due_date NULLS LAST, m.id
+  `, [pid]);
+  res.json(rows);
+});
+
+app.post('/api/milestones', auth, async (req, res) => {
+  const { project_id, title, due_date, status, remind_days_before, linked_task_id } = req.body;
+  if (!project_id || !title) return res.status(400).json({ error: '缺少必填欄位' });
+  const { rows: check } = await pool.query('SELECT user_id FROM dal_projects WHERE id=$1', [project_id]);
+  if (!check[0] || check[0].user_id !== req.session.userId) return res.status(403).json({ error: 'Forbidden' });
+  const { rows: orderRows } = await pool.query('SELECT COALESCE(MAX(sort_order),0)+1 as next FROM dal_milestones WHERE project_id=$1', [project_id]);
+  const { rows } = await pool.query(
+    'INSERT INTO dal_milestones(project_id,title,due_date,status,remind_days_before,linked_task_id,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+    [project_id, title, due_date || null, status || 'pending', remind_days_before ?? 3, linked_task_id || null, orderRows[0].next]
+  );
+  res.json(rows[0]);
+});
+
+app.patch('/api/milestones/:id', auth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { title, due_date, status, remind_days_before, linked_task_id } = req.body;
+  const { rows: check } = await pool.query(`
+    SELECT p.user_id FROM dal_milestones m JOIN dal_projects p ON p.id=m.project_id WHERE m.id=$1
+  `, [id]);
+  if (!check[0] || check[0].user_id !== req.session.userId) return res.status(403).json({ error: 'Forbidden' });
+  if (title !== undefined) await pool.query('UPDATE dal_milestones SET title=$1 WHERE id=$2', [title, id]);
+  if (due_date !== undefined) await pool.query('UPDATE dal_milestones SET due_date=$1 WHERE id=$2', [due_date || null, id]);
+  if (status !== undefined) await pool.query('UPDATE dal_milestones SET status=$1 WHERE id=$2', [status, id]);
+  if (remind_days_before !== undefined) await pool.query('UPDATE dal_milestones SET remind_days_before=$1 WHERE id=$2', [remind_days_before, id]);
+  if ('linked_task_id' in req.body) await pool.query('UPDATE dal_milestones SET linked_task_id=$1 WHERE id=$2', [linked_task_id || null, id]);
+  const { rows } = await pool.query(`
+    SELECT m.id, m.project_id, m.title, m.due_date::text as due_date, m.status,
+           m.remind_days_before, m.linked_task_id, m.sort_order, m.created_at,
+           t.title as linked_task_title, t.completed as linked_task_done
+    FROM dal_milestones m LEFT JOIN dal_tasks t ON t.id=m.linked_task_id WHERE m.id=$1
+  `, [id]);
+  res.json(rows[0]);
+});
+
+app.delete('/api/milestones/:id', auth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { rows: check } = await pool.query(`
+    SELECT p.user_id FROM dal_milestones m JOIN dal_projects p ON p.id=m.project_id WHERE m.id=$1
+  `, [id]);
+  if (!check[0] || check[0].user_id !== req.session.userId) return res.status(403).json({ error: 'Forbidden' });
+  await pool.query('DELETE FROM dal_milestones WHERE id=$1', [id]);
+  res.json({ ok: true });
+});
+
 // ── Daily Notes ───────────────────────────────────────────────────────
 app.get('/api/notes', auth, async (req, res) => {
   const { calendar_id, date_from, date_to } = req.query;
@@ -863,6 +988,26 @@ async function initDb() {
     task_id INT NOT NULL REFERENCES dal_tasks(id) ON DELETE CASCADE,
     date DATE NOT NULL,
     PRIMARY KEY (task_id, date)
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS dal_projects (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES dal_users(id) ON DELETE CASCADE,
+    name VARCHAR(200) NOT NULL,
+    color VARCHAR(20) DEFAULT '#2563eb',
+    archived BOOLEAN DEFAULT FALSE,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS dal_milestones (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER REFERENCES dal_projects(id) ON DELETE CASCADE,
+    title VARCHAR(500) NOT NULL,
+    due_date DATE,
+    status VARCHAR(20) DEFAULT 'pending',
+    remind_days_before INTEGER DEFAULT 3,
+    linked_task_id INTEGER REFERENCES dal_tasks(id) ON DELETE SET NULL,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
   )`);
   // prescription_id 本來就是 nullable，不需要額外 migration
 

@@ -165,4 +165,5 @@ async function reloadData() {
     loadHolidaysForYear(year + 1),
     loadMedDataForView(),
   ]);
+  if (S.view === 'projects') await loadProjects();
 }

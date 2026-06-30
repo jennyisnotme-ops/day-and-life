@@ -80,6 +80,7 @@
           <button class="view-tab active" data-view="month" onclick="switchView('month',this)">月</button>
           <button class="view-tab" data-view="week" onclick="switchView('week',this)">週</button>
           <button class="view-tab" data-view="day" onclick="switchView('day',this)">日</button>
+          <button class="view-tab" data-view="projects" onclick="switchView('projects',this)" style="position:relative">專案<span id="proj-badge" class="inbox-badge" style="display:none"></span></button>
           <button class="view-tab" data-view="stats" onclick="switchView('stats',this)">統計</button>
           <button class="view-tab" data-view="health" onclick="switchView('health',this)">健康</button>
         </div>
@@ -290,6 +291,7 @@
 <script src="/js/stats.js" defer></script>
 <script src="/js/settings.js" defer></script>
 <script src="/js/health.js" defer></script>
+<script src="/js/projects.js" defer></script>
 <script src="/js/main.js" defer></script>
 <button id="mobile-inbox-fab" onclick="toggleInbox()" title="事項口袋" style="display:none;position:relative">🛍️<span id="inbox-badge-mobile" class="inbox-badge" style="display:none"></span></button>
 </body>

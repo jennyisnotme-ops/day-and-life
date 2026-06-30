@@ -53,4 +53,14 @@ const API = {
   saveNote: (data) => apiFetch('/api/notes', { method:'PUT', body: data }),
 
   getStats: (calIds, year, month) => apiFetch(`/api/stats?calendar_ids=${calIds.join(',')}&year=${year}&month=${month}`),
+
+  getProjects: () => apiFetch('/api/projects'),
+  createProject: (data) => apiFetch('/api/projects', { method:'POST', body: data }),
+  updateProject: (id, data) => apiFetch(`/api/projects/${id}`, { method:'PATCH', body: data }),
+  deleteProject: (id) => apiFetch(`/api/projects/${id}`, { method:'DELETE' }),
+  getMilestones: (projId) => apiFetch(`/api/projects/${projId}/milestones`),
+  createMilestone: (data) => apiFetch('/api/milestones', { method:'POST', body: data }),
+  updateMilestone: (id, data) => apiFetch(`/api/milestones/${id}`, { method:'PATCH', body: data }),
+  deleteMilestone: (id) => apiFetch(`/api/milestones/${id}`, { method:'DELETE' }),
+  searchTasks: (q) => apiFetch(`/api/tasks/search?q=${encodeURIComponent(q)}`),
 };
